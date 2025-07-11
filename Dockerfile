@@ -4,8 +4,9 @@ FROM continuumio/miniconda3:latest AS builder
 # Copy environment file
 COPY environment.yml /tmp/environment.yml
 
-# Create conda environment
-RUN conda env create -f /tmp/environment.yml
+# Create conda environment and install PyTorch CPU-only
+RUN conda env create -f /tmp/environment.yml && \
+    conda install -n ultra-dev pytorch torchvision torchaudio cpuonly -c pytorch
 
 # Stage 2: Runtime
 FROM continuumio/miniconda3:latest
