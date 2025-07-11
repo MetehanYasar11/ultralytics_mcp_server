@@ -51,8 +51,7 @@ def process_request_args(request_data: dict) -> List[str]:
         for key, value in extra_args.items():
             if value is not None:
                 if isinstance(value, bool):
-                    if value:  # Only add flag if True
-                        args.append(f"{key}")
+                    args.append(f"{key}={str(value).lower()}")
                 else:
                     args.append(f"{key}={value}")
     
