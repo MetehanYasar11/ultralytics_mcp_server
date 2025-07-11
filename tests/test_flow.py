@@ -47,8 +47,7 @@ def train_request_payload():
         "cache": False,  # Disable caching for consistent tests
         "save_period": -1,  # Don't save intermediate checkpoints
         "extra_args": {
-            "patience": 1,  # Early stopping
-            "save": False   # Don't save final model for faster testing
+            "patience": 1  # Early stopping - removed save=False to allow model saving
         }
     }
 
