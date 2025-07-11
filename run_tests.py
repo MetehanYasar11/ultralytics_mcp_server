@@ -17,9 +17,9 @@ def run_tests():
     print("🧪 Running Ultralytics MCP Server Tests")
     print("=" * 50)
     
-    # Run pytest with verbose output
+    # Run pytest with verbose output using ultra-dev environment
     cmd = [
-        sys.executable, "-m", "pytest", 
+        "conda", "run", "-n", "ultra-dev", "pytest",
         "tests/test_flow.py",
         "-v", "-s", 
         "--tb=short",
@@ -51,7 +51,7 @@ def run_quick_tests():
     print("=" * 50)
     
     cmd = [
-        sys.executable, "-m", "pytest", 
+        "conda", "run", "-n", "ultra-dev", "pytest",
         "tests/test_flow.py::TestUltralyticsFlow::test_health_check",
         "tests/test_flow.py::TestIndividualEndpoints",
         "-v", "-s", 
