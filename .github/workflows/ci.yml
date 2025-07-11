@@ -26,8 +26,9 @@ jobs:
         activate-environment: ultra-dev
         auto-activate-base: false
         miniforge-version: latest
+        mamba-version: "*"
         use-mamba: true
-        channels: conda-forge,defaults
+        channels: conda-forge,defaults,pytorch
     
     - name: Cache Conda packages
       uses: actions/cache@v3
@@ -169,6 +170,7 @@ jobs:
         activate-environment: ultra-dev
         auto-activate-base: false
         miniforge-version: latest
+        mamba-version: "*"
         use-mamba: true
     
     - name: Cache Conda packages
