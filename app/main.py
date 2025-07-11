@@ -40,6 +40,9 @@ def process_request_args(request_data: dict) -> List[str]:
     # Extract extra_args if present
     extra_args = request_data.pop('extra_args', {})
     
+    # Remove 'task' from request_data since it's handled as the command mode
+    request_data.pop('task', None)
+    
     # Convert main request to args
     args = parse_yolo_args(request_data)
     
