@@ -6,6 +6,12 @@ import os
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
 
 def run_ultralytics(args: List[str]) -> Dict[str, Any]:
     """
@@ -266,6 +272,13 @@ def _find_artifacts() -> List[str]:
 def parse_yolo_args(args_dict: Dict[str, Any]) -> List[str]:
     """Convert dictionary of arguments to YOLO CLI format."""
     args = []
+    
+    # Ensure device defaults to CPU when CUDA is not available
+    if 'device' not in args_dict or args_dict['device'] is None:
+        if TORCH_AVAILABLE and torch.cuda.is_available():
+            args_dict['device'] = 'cuda'
+        else:
+            args_dict['device'] = 'cpu'
     
     for key, value in args_dict.items():
         if value is not None:
