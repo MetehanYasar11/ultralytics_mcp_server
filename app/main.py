@@ -46,15 +46,15 @@ def process_request_args(request_data: dict) -> List[str]:
     # Convert main request to args
     args = parse_yolo_args(request_data)
     
-    # Add extra arguments
+    # Add extra arguments in YOLO format (key=value)
     if extra_args:
         for key, value in extra_args.items():
             if value is not None:
                 if isinstance(value, bool):
                     if value:  # Only add flag if True
-                        args.append(f"--{key}")
+                        args.append(f"{key}")
                 else:
-                    args.extend([f"--{key}", str(value)])
+                    args.append(f"{key}={value}")
     
     return args
 

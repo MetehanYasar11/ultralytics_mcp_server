@@ -283,9 +283,10 @@ def parse_yolo_args(args_dict: Dict[str, Any]) -> List[str]:
     for key, value in args_dict.items():
         if value is not None:
             if isinstance(value, bool):
-                if value:  # Only add flag if True
-                    args.append(f"--{key}")
+                if value:  # Only add flag if True (e.g., save=True becomes 'save')
+                    args.append(f"{key}")
             else:
-                args.extend([f"--{key}", str(value)])
+                # YOLO uses key=value format, not --key value
+                args.append(f"{key}={value}")
     
     return args
