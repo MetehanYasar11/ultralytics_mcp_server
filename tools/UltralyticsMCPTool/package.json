@@ -1,0 +1,56 @@
+{
+  "name": "ultralytics-mcp-tool",
+  "version": "0.1.0",
+  "description": "MCP-compliant tool for Ultralytics YOLO operations",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "clean": "rimraf dist"
+  },
+  "keywords": [
+    "ultralytics",
+    "yolo",
+    "mcp",
+    "model-context-protocol",
+    "computer-vision",
+    "machine-learning"
+  ],
+  "author": "Ultralytics MCP Server",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "eventsource": "^2.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/eventsource": "^1.1.12",
+    "typescript": "^5.0.0",
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "rimraf": "^5.0.0"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ultralytics/ultralytics-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ultralytics/ultralytics-mcp-server/issues"
+  },
+  "homepage": "https://github.com/ultralytics/ultralytics-mcp-server#readme"
+}

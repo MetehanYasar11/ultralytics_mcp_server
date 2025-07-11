@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  ultra-api:
+    image: ghcr.io/your-org/ultra-api:latest
+    container_name: ultralytics-mcp-server
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./datasets:/datasets:rw
+      - ./runs:/runs:rw
+      # Optional: Mount configuration files
+      - ./config:/app/config:ro
+      # Optional: Mount cache directory for faster model downloads
+      - ultralytics-cache:/root/.cache/ultralytics
+    environment:
+      - ULTRA_API_KEY=${ULTRA_API_KEY:-your-api-key-here}
+      # Optional: Additional environment variables
+      - PYTHONUNBUFFERED=1
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}
+      - ULTRALYTICS_SETTINGS_DIR=/app/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    # Optional: Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+    # Optional: Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Optional: Networks
+    networks:
+      - ultralytics-network
+
+# Optional: Named volumes for persistent data
+volumes:
+  ultralytics-cache:
+    driver: local
+
+# Optional: Custom network
+networks:
+  ultralytics-network:
+    driver: bridge

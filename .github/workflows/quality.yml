@@ -1,0 +1,143 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    name: Lint and Format Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        environment-file: environment.yml
+        activate-environment: ultra-dev
+        auto-activate-base: false
+        miniforge-version: latest
+        use-mamba: true
+    
+    - name: Cache Conda packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          /usr/share/miniconda3/envs/ultra-dev
+          ~/.cache/conda
+          ~/.cache/pip
+        key: conda-lint-${{ runner.os }}-${{ hashFiles('environment.yml') }}
+        restore-keys: |
+          conda-lint-${{ runner.os }}-
+          conda-${{ runner.os }}-
+    
+    - name: Install linting tools
+      shell: bash -el {0}
+      run: |
+        pip install black isort flake8 mypy pylint bandit
+    
+    - name: Check code formatting with Black
+      shell: bash -el {0}
+      run: |
+        black --check --diff app/ tests/
+    
+    - name: Check import sorting with isort
+      shell: bash -el {0}
+      run: |
+        isort --check-only --diff app/ tests/
+    
+    - name: Lint with flake8
+      shell: bash -el {0}
+      run: |
+        flake8 app/ tests/ --max-line-length=88 --extend-ignore=E203,W503
+    
+    - name: Type check with mypy
+      shell: bash -el {0}
+      run: |
+        mypy app/ --ignore-missing-imports
+    
+    - name: Security check with bandit
+      shell: bash -el {0}
+      run: |
+        bandit -r app/ -f json -o bandit-report.json || true
+    
+    - name: Upload bandit results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: bandit-report
+        path: bandit-report.json
+
+  typescript-lint:
+    name: TypeScript Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: tools/UltralyticsMCPTool/package-lock.json
+    
+    - name: Install TypeScript dependencies
+      working-directory: tools/UltralyticsMCPTool
+      run: |
+        npm ci
+    
+    - name: TypeScript compile check
+      working-directory: tools/UltralyticsMCPTool
+      run: |
+        npm run build
+    
+    - name: Lint TypeScript
+      working-directory: tools/UltralyticsMCPTool
+      run: |
+        npm run lint || true
+
+  dockerfile-lint:
+    name: Dockerfile Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Lint Dockerfile
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: Dockerfile
+        format: sarif
+        output-file: hadolint-results.sarif
+        no-fail: true
+    
+    - name: Upload Hadolint results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: hadolint-results.sarif
+
+  yaml-lint:
+    name: YAML Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Lint YAML files
+      uses: ibiqlik/action-yamllint@v3
+      with:
+        file_or_dir: |
+          .github/workflows/
+          environment.yml
+          pyproject.toml
+        format: parsable

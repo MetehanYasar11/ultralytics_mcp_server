@@ -1,0 +1,168 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: your-org/ultra-api
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+      packages: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        environment-file: environment.yml
+        activate-environment: ultra-dev
+        auto-activate-base: false
+        miniforge-version: latest
+        use-mamba: true
+    
+    - name: Cache Conda packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          /usr/share/miniconda3/envs/ultra-dev
+          ~/.cache/conda
+          ~/.cache/pip
+        key: conda-release-${{ runner.os }}-${{ hashFiles('environment.yml') }}
+        restore-keys: |
+          conda-release-${{ runner.os }}-
+          conda-${{ runner.os }}-
+    
+    - name: Run tests
+      shell: bash -el {0}
+      run: |
+        pytest -q --tb=short
+    
+    - name: Extract version from tag
+      id: version
+      run: |
+        echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        echo "VERSION_NUMBER=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+    
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build and push release Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION_NUMBER }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        labels: |
+          org.opencontainers.image.title=Ultralytics MCP Server
+          org.opencontainers.image.description=MCP server for Ultralytics YOLO operations
+          org.opencontainers.image.version=${{ steps.version.outputs.VERSION_NUMBER }}
+          org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          org.opencontainers.image.revision=${{ github.sha }}
+          org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+    
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Get commits since last tag
+        if git describe --tags --abbrev=0 HEAD^ >/dev/null 2>&1; then
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^)
+          CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"* %s (%h)" --reverse)
+        else
+          CHANGELOG=$(git log --pretty=format:"* %s (%h)" --reverse)
+        fi
+        
+        echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.VERSION }}
+        name: Release ${{ steps.version.outputs.VERSION }}
+        body: |
+          ## What's Changed
+          
+          ${{ steps.changelog.outputs.CHANGELOG }}
+          
+          ## Docker Image
+          
+          ```bash
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION_NUMBER }}
+          ```
+          
+          ## Installation
+          
+          ```bash
+          # Using conda
+          conda env create -f environment.yml
+          conda activate ultra-dev
+          
+          # Using docker
+          docker run -p 8000:8000 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION_NUMBER }}
+          ```
+          
+          **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}
+        draft: false
+        prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
+        generate_release_notes: true
+    
+    - name: Build and publish TypeScript tool
+      working-directory: tools/UltralyticsMCPTool
+      run: |
+        # Install dependencies
+        npm ci
+        
+        # Update version in package.json
+        npm version ${{ steps.version.outputs.VERSION_NUMBER }} --no-git-tag-version
+        
+        # Build
+        npm run build
+        
+        # Publish to npm (if NPM_TOKEN is available)
+        if [ -n "${{ secrets.NPM_TOKEN }}" ]; then
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+          npm publish --access public
+        fi
+    
+    - name: Update documentation
+      shell: bash -el {0}
+      run: |
+        # Install mkdocs
+        pip install mkdocs mkdocs-material mkdocstrings[python]
+        
+        # Build docs
+        mkdocs build
+        
+        # Deploy to GitHub Pages
+        mkdocs gh-deploy --force
+    
+    - name: Notify release
+      run: |
+        echo "🎉 Release ${{ steps.version.outputs.VERSION }} created successfully!"
+        echo "🐳 Docker image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION_NUMBER }}"
+        echo "📚 Documentation: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"

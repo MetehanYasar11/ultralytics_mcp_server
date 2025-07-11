@@ -1,0 +1,89 @@
+# Docker Compose Override for Development
+# This file extends docker-compose.yml for development purposes
+# Use: docker-compose -f docker-compose.yml -f docker-compose.override.yml up
+
+version: '3.8'
+
+services:
+  ultra-api:
+    # Override image for development (use local build)
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ultralytics-mcp-server:dev
+    
+    # Development-specific volumes
+    volumes:
+      - ./app:/app/app:ro  # Mount source code for hot reload
+      - ./tests:/app/tests:ro
+      - ./datasets:/datasets:rw
+      - ./runs:/runs:rw
+      - ./logs:/app/logs:rw
+      - dev-cache:/root/.cache/ultralytics
+    
+    # Development environment variables
+    environment:
+      - ULTRA_API_KEY=dev-api-key
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - PYTHONUNBUFFERED=1
+      - RELOAD=true
+    
+    # Override command for development with auto-reload
+    command: >
+      bash -c "
+        pip install watchdog &&
+        uvicorn app.main:app 
+        --host 0.0.0.0 
+        --port 8000 
+        --reload 
+        --reload-dir /app/app
+        --log-level debug
+      "
+    
+    # Development ports (may include additional debugging ports)
+    ports:
+      - "8000:8000"
+      - "8001:8001"  # Additional port for debugging/monitoring
+    
+    # Remove resource limits for development
+    deploy:
+      resources: {}
+    
+    # More frequent health checks in development
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 15s
+      timeout: 3s
+      retries: 2
+      start_period: 10s
+
+  # Optional: Add development database or cache services
+  redis:
+    image: redis:7-alpine
+    container_name: ultralytics-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - ultralytics-network
+
+  # Optional: Add monitoring service for development
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ultralytics-prometheus-dev
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - ultralytics-network
+    profiles:
+      - monitoring
+
+volumes:
+  dev-cache:
+    driver: local
+  redis-data:
+    driver: local

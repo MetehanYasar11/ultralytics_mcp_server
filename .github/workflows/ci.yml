@@ -1,0 +1,260 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: your-org/ultra-api
+
+jobs:
+  test:
+    name: Test with Conda
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        environment-file: environment.yml
+        activate-environment: ultra-dev
+        auto-activate-base: false
+        miniforge-version: latest
+        use-mamba: true
+        channels: conda-forge,defaults
+    
+    - name: Cache Conda packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          /usr/share/miniconda3/envs/ultra-dev
+          ~/.cache/conda
+          ~/.cache/pip
+        key: conda-${{ runner.os }}-${{ hashFiles('environment.yml') }}
+        restore-keys: |
+          conda-${{ runner.os }}-
+    
+    - name: Verify environment
+      shell: bash -el {0}
+      run: |
+        conda info
+        conda list
+        python --version
+        pip list
+    
+    - name: Install additional test dependencies
+      shell: bash -el {0}
+      run: |
+        pip install pytest-cov pytest-xdist
+    
+    - name: Run tests
+      shell: bash -el {0}
+      run: |
+        pytest -q --tb=short
+    
+    - name: Run tests with coverage
+      shell: bash -el {0}
+      run: |
+        pytest --cov=app --cov-report=xml --cov-report=term-missing
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  build:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: test
+    
+    services:
+      ultralytics-api:
+        image: continuumio/miniconda3:latest
+        ports:
+          - 8000:8000
+        options: >-
+          --health-cmd "curl -f http://localhost:8000/ || exit 1"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 5
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        environment-file: environment.yml
+        activate-environment: ultra-dev
+        auto-activate-base: false
+        miniforge-version: latest
+        use-mamba: true
+    
+    - name: Cache Conda packages
+      uses: actions/cache@v3
+      with:
+        path: |
+          /usr/share/miniconda3/envs/ultra-dev
+          ~/.cache/conda
+          ~/.cache/pip
+        key: conda-integration-${{ runner.os }}-${{ hashFiles('environment.yml') }}
+        restore-keys: |
+          conda-integration-${{ runner.os }}-
+          conda-${{ runner.os }}-
+    
+    - name: Start API server
+      shell: bash -el {0}
+      run: |
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+        sleep 10
+    
+    - name: Wait for API to be ready
+      run: |
+        timeout 60 bash -c 'until curl -f http://localhost:8000/; do sleep 2; done'
+    
+    - name: Run integration tests
+      shell: bash -el {0}
+      run: |
+        pytest tests/test_flow.py -v --tb=short
+    
+    - name: Test API endpoints
+      run: |
+        # Test health endpoint
+        curl -f http://localhost:8000/ || exit 1
+        
+        # Test OpenAPI docs
+        curl -f http://localhost:8000/docs || exit 1
+        
+        # Test OpenAPI JSON
+        curl -f http://localhost:8000/openapi.json || exit 1
+
+  docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install documentation dependencies
+      run: |
+        pip install mkdocs mkdocs-material mkdocstrings[python]
+    
+    - name: Build documentation
+      run: |
+        mkdocs build
+    
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      if: github.ref == 'refs/heads/main'
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./site
+
+  notify:
+    name: Notify on Success
+    runs-on: ubuntu-latest
+    needs: [test, build, security, integration-test]
+    if: always() && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Notify success
+      if: needs.test.result == 'success' && needs.build.result == 'success'
+      run: |
+        echo "✅ CI/CD Pipeline completed successfully!"
+        echo "🐳 Docker image pushed to ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+    
+    - name: Notify failure
+      if: needs.test.result == 'failure' || needs.build.result == 'failure'
+      run: |
+        echo "❌ CI/CD Pipeline failed!"
+        echo "📧 Check the logs for more details."
+        exit 1
