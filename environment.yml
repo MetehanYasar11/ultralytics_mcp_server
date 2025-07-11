@@ -2,8 +2,13 @@ name: ultra-dev
 channels:
   - conda-forge
   - defaults
+  - pytorch
 dependencies:
   - python=3.11
+  - pytorch
+  - torchvision
+  - torchaudio
+  - cpuonly
   - ultralytics
   - fastapi
   - uvicorn
