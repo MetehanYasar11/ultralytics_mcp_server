@@ -17,7 +17,7 @@ The Ultralytics MCP Server transforms Ultralytics' command-line YOLO operations 
 
 - **🌐 RESTful API**: HTTP endpoints for all YOLO operations with comprehensive request/response validation
 - **📡 Real-time Updates**: Server-Sent Events (SSE) for monitoring long-running operations like training
-- **🔧 MCP Compliance**: Full Model Context Protocol support for workflow automation tools
+- **🤝 MCP Compliance**: Full Model Context Protocol support with handshake endpoint and tool discovery for workflow automation
 - **🐳 Production Ready**: Docker containerization with multi-stage builds and security scanning
 - **🧪 Battle Tested**: Comprehensive test suite with CI/CD pipeline and 90%+ code coverage
 - **📊 Observability**: Built-in metrics parsing, health checks, and monitoring endpoints
@@ -120,6 +120,7 @@ curl -X POST "http://localhost:8000/predict" \
 4. Run workflow → live epoch/loss lines appear in the node's execution log.  
 
 **🎯 Available SSE Endpoints:**
+- `/sse` - **MCP handshake endpoint** with tool discovery and keep-alive
 - `/sse/train` - Real-time training progress with epoch updates
 - `/sse/predict` - Live prediction results 
 - `/sse/val` - Validation metrics streaming
@@ -128,7 +129,19 @@ curl -X POST "http://localhost:8000/predict" \
 - `/sse/benchmark` - Performance testing results
 - `/sse/solution` - Solution execution logs
 
-**📊 SSE Example:**
+**📊 SSE Examples:**
+
+**MCP Handshake:**
+```bash
+curl -N "http://localhost:8092/sse"
+# Output:
+# data: {"tools": ["train", "val", "predict", "export", "track", "benchmark"], "info": "Ultralytics MCP ready"}
+# : ping
+# : ping
+# (continues with keep-alive pings every 15s)
+```
+
+**Training with Live Progress:**
 ```bash
 curl -N "http://localhost:8092/sse/train?data=coco128.yaml&epochs=1&device=cpu"
 # Output:
@@ -473,6 +486,34 @@ See [`tests/README.md`](tests/README.md) for detailed test documentation.
 
 ## 🚀 n8n Integration
 
+### n8n MCP Client Setup
+
+```
+SSE Endpoint   : http://host.docker.internal:8092/sse
+OpenAPI URL    : http://host.docker.internal:8092/openapi.json
+Manifest URL   : http://host.docker.internal:8092/mcp/manifest.json
+Tools          : train · val · predict · export · track · benchmark
+Timeout        : 0
+```
+
+### 🤝 MCP Handshake Protocol
+
+The `/sse` endpoint now serves as a **Model Context Protocol (MCP) handshake endpoint**:
+
+1. **Initial Connection**: When you connect to `/sse`, it immediately sends a tool discovery message:
+   ```
+   data: {"tools": ["train", "val", "predict", "export", "track", "benchmark"], "info": "Ultralytics MCP ready"}
+   ```
+
+2. **Keep-Alive**: After the handshake, it sends ping comments every 15 seconds to maintain the connection:
+   ```
+   : ping
+   ```
+
+3. **Tool Discovery**: MCP clients can discover available tools via:
+   - **Manifest Endpoint**: `GET /mcp/manifest.json` - Static tool definitions
+   - **SSE Handshake**: `GET /sse` - Dynamic tool discovery with live connection
+
 ### Streaming in n8n  
 1. Drag **MCP Client Tool** → *SSE Endpoint* `http://host.docker.internal:8092/sse/train` (or `/sse/predict`).  
 2. *OpenAPI URL* `http://host.docker.internal:8092/openapi.json`.  
@@ -480,6 +521,7 @@ See [`tests/README.md`](tests/README.md) for detailed test documentation.
 4. Run workflow → live epoch/loss lines appear in execution log (see GIF).  
 
 **Available SSE Endpoints:**
+- `/sse` - **MCP handshake endpoint** with tool discovery and keep-alive
 - `/sse/train` - Real-time training progress with epoch updates
 - `/sse/predict` - Live prediction results 
 - `/sse/val` - Validation metrics streaming

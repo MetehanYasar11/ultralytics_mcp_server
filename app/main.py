@@ -3,8 +3,11 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 import uuid
+import asyncio
+import json
 from datetime import datetime
 from .ultra import run_ultralytics, parse_yolo_args, run_ultra_stream
+from .manifest import get_manifest
 from .schemas import (
     TrainRequest, ValRequest, PredictRequest, ExportRequest,
     TrackRequest, BenchmarkRequest, SolutionRequest, 
@@ -68,6 +71,38 @@ def process_request_args(request_data: dict) -> List[str]:
     
     return args
 
+def build_cli_from_query(op: str, query_params) -> List[str]:
+    """Build CLI arguments from query parameters for SSE endpoints"""
+    # Convert query params to dict
+    params = dict(query_params)
+    
+    # Build CLI arguments using existing parser
+    args = parse_yolo_args(params)
+    
+    # Add the operation as the first argument
+    return [op] + args
+
+@app.get("/mcp/manifest.json", tags=["MCP"])
+async def manifest():
+    """MCP manifest endpoint providing server capabilities and tool definitions"""
+    return get_manifest()
+
+@app.get("/sse", tags=["MCP"], summary="MCP keep-alive stream")
+async def sse_root():
+    """MCP handshake endpoint providing tools and keep-alive functionality"""
+    async def stream():
+        # First event → tells MCP Client which tools exist
+        manifest = {
+            'tools': ['train','val','predict','export','track','benchmark'],
+            'info' : 'Ultralytics MCP ready'
+        }
+        yield f'data: {json.dumps(manifest)}\n\n'
+        # Every 15 s send a comment to keep the HTTP/1.1 connection open
+        while True:
+            yield b': ping\n\n'
+            await asyncio.sleep(15)
+    return StreamingResponse(stream(), media_type='text/event-stream')
+
 @app.get("/", response_model=HealthResponse)
 async def root():
     """Health check endpoint"""
@@ -120,8 +155,8 @@ async def solution(request: SolutionRequest):
     args = process_request_args(request.dict())
     return execute_ultralytics_command("solution", args)
 
-@app.get("/sse/{op}")
-async def sse_endpoint(op: str, request: Request):
+@app.get("/sse/{op}", tags=["SSE"])
+async def sse_op(op: str, request: Request):
     """
     Server-Sent Events endpoint for real-time YOLO operation streaming.
     
@@ -130,18 +165,12 @@ async def sse_endpoint(op: str, request: Request):
     
     Supported operations: train, val, predict, export, track, benchmark, solution
     """
-    # Extract query parameters
-    query_params = dict(request.query_params)
-    
     # Build CLI arguments from query parameters
-    args = parse_yolo_args(query_params)
-    
-    # Add the operation as the first argument
-    full_args = [op] + args
+    cli = build_cli_from_query(op, request.query_params)
     
     # Return streaming response
     return StreamingResponse(
-        run_ultra_stream(full_args),
+        run_ultra_stream(cli),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
