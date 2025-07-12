@@ -1,8 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 import uuid
 from datetime import datetime
-from .ultra import run_ultralytics, parse_yolo_args
+from .ultra import run_ultralytics, parse_yolo_args, run_ultra_stream
 from .schemas import (
     TrainRequest, ValRequest, PredictRequest, ExportRequest,
     TrackRequest, BenchmarkRequest, SolutionRequest, 
@@ -10,6 +12,15 @@ from .schemas import (
 )
 
 app = FastAPI(title="Ultralytics API", description="API for Ultralytics YOLO operations")
+
+# Add CORS middleware to allow all origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def execute_ultralytics_command(command: str, args: List[str]) -> OperationResponse:
     """Execute ultralytics command and return structured response"""
@@ -108,6 +119,36 @@ async def solution(request: SolutionRequest):
     """Run Ultralytics solutions"""
     args = process_request_args(request.dict())
     return execute_ultralytics_command("solution", args)
+
+@app.get("/sse/{op}")
+async def sse_endpoint(op: str, request: Request):
+    """
+    Server-Sent Events endpoint for real-time YOLO operation streaming.
+    
+    Accepts query parameters identical to REST operations and streams
+    live stdout from the YOLO command execution.
+    
+    Supported operations: train, val, predict, export, track, benchmark, solution
+    """
+    # Extract query parameters
+    query_params = dict(request.query_params)
+    
+    # Build CLI arguments from query parameters
+    args = parse_yolo_args(query_params)
+    
+    # Add the operation as the first argument
+    full_args = [op] + args
+    
+    # Return streaming response
+    return StreamingResponse(
+        run_ultra_stream(full_args),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # Disable nginx buffering
+        }
+    )
 
 if __name__ == "__main__":
     import uvicorn

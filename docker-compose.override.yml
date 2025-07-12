@@ -2,15 +2,15 @@
 # This file extends docker-compose.yml for development purposes
 # Use: docker-compose -f docker-compose.yml -f docker-compose.override.yml up
 
-version: '3.8'
-
 services:
-  ultra-api:
+  ultralytics-api:
     # Override image for development (use local build)
     build:
       context: .
       dockerfile: Dockerfile
     image: ultralytics-mcp-server:dev
+    # Don't pull, use local build
+    pull_policy: never
     
     # Development-specific volumes
     volumes:

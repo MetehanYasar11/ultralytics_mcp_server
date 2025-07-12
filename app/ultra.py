@@ -3,7 +3,7 @@ import json
 import yaml
 import re
 import os
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Generator
 from pathlib import Path
 
 try:
@@ -11,6 +11,48 @@ try:
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
+
+
+def run_ultra_stream(args: List[str]) -> Generator[str, None, None]:
+    """
+    Execute YOLO command via subprocess and stream stdout lines in SSE format.
+    
+    Args:
+        args: List of command line arguments for YOLO
+        
+    Yields:
+        SSE-formatted strings with 'data: ' prefix and '\n\n' suffix
+    """
+    # Build the full command
+    full_command = ["yolo"] + args
+    
+    try:
+        # Start the process
+        process = subprocess.Popen(
+            full_command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # Merge stderr into stdout for complete output
+            text=True,
+            bufsize=1,  # Line buffered
+            universal_newlines=True,
+            cwd=os.getcwd()
+        )
+        
+        # Stream each line as SSE data
+        for line in iter(process.stdout.readline, ''):
+            if line.strip():  # Only yield non-empty lines
+                # Format as Server-Sent Events according to RFC spec
+                yield f"data: {line.strip()}\n\n"
+        
+        # Wait for process to complete and yield final status
+        process.wait()
+        if process.returncode == 0:
+            yield f"data: [COMPLETED] Process finished successfully\n\n"
+        else:
+            yield f"data: [ERROR] Process finished with code {process.returncode}\n\n"
+            
+    except Exception as e:
+        yield f"data: [ERROR] {str(e)}\n\n"
 
 
 def run_ultralytics(args: List[str]) -> Dict[str, Any]:

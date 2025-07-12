@@ -107,6 +107,43 @@ curl -X POST "http://localhost:8000/predict" \
 3. **Server Start**: Launched FastAPI server with auto-reload for development
 4. **API Test**: Made a prediction request using a pre-trained YOLOv8 nano model
 
+## 🟢 Real-time SSE with n8n
+
+![SSE Live Logs](https://img.shields.io/badge/SSE-Live%20Logs-brightgreen?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTMuMDkgOC4yNkwyMCA5TDEzLjA5IDE1Ljc0TDEyIDIyTDEwLjkxIDE1Ljc0TDQgOUwxMC45MSA4LjI2TDEyIDJaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K)
+
+**Live streaming updates for YOLO operations with Server-Sent Events (SSE)**
+
+### Using SSE in n8n  
+1. Drag **MCP Client Tool** ➜ set *SSE Endpoint* `http://host.docker.internal:8092/sse/train` (or compose DNS `ultra-api:8000/sse/train`).  
+2. In **Settings ➜ OpenAPI URL** use `http://host.docker.internal:8092/openapi.json`.  
+3. Set **Timeout** `0` to keep stream open.  
+4. Run workflow → live epoch/loss lines appear in the node's execution log.  
+
+**🎯 Available SSE Endpoints:**
+- `/sse/train` - Real-time training progress with epoch updates
+- `/sse/predict` - Live prediction results 
+- `/sse/val` - Validation metrics streaming
+- `/sse/export` - Export progress updates
+- `/sse/track` - Object tracking stream
+- `/sse/benchmark` - Performance testing results
+- `/sse/solution` - Solution execution logs
+
+**📊 SSE Example:**
+```bash
+curl -N "http://localhost:8092/sse/train?data=coco128.yaml&epochs=1&device=cpu"
+# Output:
+# data: Ultralytics YOLOv8.0.196 🚀 Python-3.11.5 torch-2.1.1
+# data: 
+# data: train: Scanning /datasets/coco128/labels/train2017.cache... 126 images, 2 backgrounds, 0 corrupt: 100%|██████████| 128/128
+# data: val: Scanning /datasets/coco128/labels/train2017.cache... 126 images, 2 backgrounds, 0 corrupt: 100%|██████████| 128/128  
+# data: 
+# data: Epoch    GPU_mem   box_loss   cls_loss   dfl_loss  Instances       Size
+# data:   1/1      0.12G      1.325      2.009      1.268         89        640: 100%|██████████| 8/8
+# data: [COMPLETED] Process finished successfully
+```
+
+**🔗 OpenAPI Documentation:** [http://localhost:8092/docs#/default/sse_endpoint_sse__op__get](http://localhost:8092/docs#/default/sse_endpoint_sse__op__get)
+
 ## 🧪 Running Tests
 
 Our comprehensive test suite ensures reliability across all operations.
@@ -436,7 +473,32 @@ See [`tests/README.md`](tests/README.md) for detailed test documentation.
 
 ## 🚀 n8n Integration
 
-Integrate Ultralytics operations into your n8n workflows using the MCP tool.
+### Streaming in n8n  
+1. Drag **MCP Client Tool** → *SSE Endpoint* `http://host.docker.internal:8092/sse/train` (or `/sse/predict`).  
+2. *OpenAPI URL* `http://host.docker.internal:8092/openapi.json`.  
+3. Timeout 0, Auth None.  
+4. Run workflow → live epoch/loss lines appear in execution log (see GIF).  
+
+**Available SSE Endpoints:**
+- `/sse/train` - Real-time training progress with epoch updates
+- `/sse/predict` - Live prediction results 
+- `/sse/val` - Validation metrics streaming
+- `/sse/export` - Export progress updates
+- `/sse/track` - Object tracking stream
+- `/sse/benchmark` - Performance testing results
+- `/sse/solution` - Solution execution logs
+
+**Example SSE Training Stream:**
+```bash
+curl -N "http://localhost:8092/sse/train?data=coco128.yaml&epochs=1&device=cpu"
+# Output:
+# data: Ultralytics YOLOv8.0.196 🚀 Python-3.11.5 torch-2.1.1
+# data: Epoch    GPU_mem   box_loss   cls_loss   dfl_loss  Instances       Size
+# data:   1/1      0.12G      1.325      2.009      1.268         89        640: 100%|██████████| 8/8
+# data: [COMPLETED] Process finished successfully
+```
+
+For detailed integration examples, see [`tools/UltralyticsMCPTool/README.md`](tools/UltralyticsMCPTool/README.md).
 
 ### 1. Environment Setup
 

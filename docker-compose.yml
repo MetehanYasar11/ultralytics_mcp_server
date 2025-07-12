@@ -1,8 +1,11 @@
-version: '3.8'
-
 services:
-  ultra-api:
-    image: ghcr.io/your-org/ultra-api:latest
+  ultralytics-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ultralytics-mcp-server:latest
+    # Don't pull, use local build
+    pull_policy: never
     container_name: ultralytics-mcp-server
     restart: unless-stopped
     ports:

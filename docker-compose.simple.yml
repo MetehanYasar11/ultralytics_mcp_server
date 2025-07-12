@@ -1,0 +1,34 @@
+services:
+  ultralytics-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ultralytics-mcp-server:latest
+    container_name: ultralytics-mcp-server
+    restart: unless-stopped
+    ports:
+      - "8092:8000"
+    volumes:
+      - ./datasets:/datasets:rw
+      - ./runs:/runs:rw
+      - ultralytics-cache:/root/.cache/ultralytics
+    environment:
+      - ULTRA_API_KEY=${ULTRA_API_KEY:-your-api-key-here}
+      - PYTHONUNBUFFERED=1
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ultralytics-network
+
+volumes:
+  ultralytics-cache:
+    driver: local
+
+networks:
+  ultralytics-network:
+    driver: bridge
