@@ -35,7 +35,7 @@ services:
   mcp-connector:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.mcp-connector
     container_name: mcp-connector-container
     volumes:
       - ./shared:/shared

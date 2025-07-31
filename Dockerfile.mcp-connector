@@ -11,12 +11,12 @@ RUN apk add --no-cache \
     docker-cli \
     curl
 
+# Copy package.json and install dependencies
+COPY package.json ./
+RUN npm install
+
 # Copy the source code
 COPY src/ ./src/
-COPY package.json ./
-
-# Copy the MCP server code
-COPY src/server.js ./src/
 
 # Create logs directory
 RUN mkdir -p /app/logs
