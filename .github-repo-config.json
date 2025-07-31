@@ -1,0 +1,29 @@
+{
+  "name": "ultralytics_mcp_server",
+  "description": "🚀 Ultralytics MCP Server - AI/ML Model Context Protocol server for YOLO object detection and computer vision tasks. Integrates with N8N workflows via Docker containers.",
+  "homepage": "https://github.com/MetehanYasar11/ultralytics_mcp_server",
+  "topics": [
+    "mcp-server",
+    "ultralytics",
+    "yolo",
+    "computer-vision",
+    "ai",
+    "machine-learning",
+    "n8n",
+    "docker",
+    "model-context-protocol",
+    "object-detection"
+  ],
+  "has_projects": true,
+  "has_wiki": true,
+  "has_pages": false,
+  "has_downloads": true,
+  "has_issues": true,
+  "archived": false,
+  "disabled": false,
+  "visibility": "public",
+  "allow_merge_commit": true,
+  "allow_squash_merge": true,
+  "allow_rebase_merge": true,
+  "delete_branch_on_merge": false
+}
