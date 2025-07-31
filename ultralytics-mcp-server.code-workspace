@@ -1,0 +1,18 @@
+{
+	"folders": [
+		{
+			"name": "Ultralytics MCP Server",
+			"path": "."
+		}
+	],
+	"settings": {
+		"git.repositoryDisplayName": "ultralytics_mcp_server"
+	},
+	"extensions": {
+		"recommendations": [
+			"ms-vscode.vscode-json",
+			"ms-python.python",
+			"ms-vscode.vscode-docker"
+		]
+	}
+}
