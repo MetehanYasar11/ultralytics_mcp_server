@@ -1,0 +1,61 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# GPU-optimized Ultralytics Docker container for CUDA 12.9 support with RTX 5070 Ti
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_BREAK_SYSTEM_PACKAGES=1 \
+    MKL_THREADING_LAYER=GNU \
+    OMP_NUM_THREADS=1 \
+    TF_CPP_MIN_LOG_LEVEL=3 \
+    DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    python3.11 python3.11-dev python3.11-distutils python3-pip \
+    gcc g++ git zip unzip wget curl htop libgl1 libglib2.0-0 \
+    libpython3-dev gnupg libsm6 libxext6 libxrender-dev \
+    libglib2.0-0 libgtk-3-dev libavcodec-dev libavformat-dev \
+    libswscale-dev libv4l-dev libxvidcore-dev libx264-dev \
+    libjpeg-dev libpng-dev libtiff-dev gfortran openexr \
+    libatlas-base-dev libtbb2 libtbb-dev libdc1394-dev \
+    libopenexr-dev libgstreamer-plugins-base1.0-dev \
+    libgstreamer1.0-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create symbolic links for python
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python3
+
+# Install pip for Python 3.11
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
+
+# Download fonts
+ADD https://github.com/ultralytics/assets/releases/download/v0.0.0/Arial.ttf \
+    https://github.com/ultralytics/assets/releases/download/v0.0.0/Arial.Unicode.ttf \
+    /root/.config/Ultralytics/
+
+# Create working directory
+WORKDIR /ultralytics
+
+# Copy project files
+COPY . .
+
+# Install PyTorch nightly for CUDA 12.9 (exact match for your nvidia-smi output)
+RUN pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu129
+
+# Install ultralytics and dependencies directly from PyPI
+RUN pip install ultralytics albumentations faster-coco-eval tensorrt wandb jupyter
+
+# Download YOLO model
+ADD https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt .
+
+# Expose Jupyter port
+EXPOSE 8888
+
+# Default command
+CMD ["jupyter", "lab", "--allow-root", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--NotebookApp.token=''", "--NotebookApp.password=''"]

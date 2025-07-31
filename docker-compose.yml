@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  ultralytics:
+    build:
+      context: .
+      dockerfile: Dockerfile.ultralytics
+    container_name: ultralytics-container
+    volumes:
+      - ./ultralytics:/workspace
+      - ./shared:/shared
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "8888:8888"  # Jupyter
+      - "6006:6006"  # TensorBoard
+    command: bash -c "jupyter lab --allow-root --ip=0.0.0.0 --port=8888 --no-browser --NotebookApp.token='' --NotebookApp.password='' || sleep infinity"
+    stdin_open: true
+    tty: true
+    shm_size: '16gb'
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    networks:
+      - ultralytics-network
+
+  mcp-connector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp-connector-container
+    volumes:
+      - ./shared:/shared
+      - ./logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock  # Docker socket for container communication
+    ports:
+      - "8092:8092"  # MCP Server SSE endpoint
+    environment:
+      - NODE_ENV=production
+      - PORT=8092
+    depends_on:
+      - ultralytics
+    networks:
+      - ultralytics-network
+      - n8n-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8092/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  ultralytics-network:
+    driver: bridge
+    name: ultralytics-network
+  n8n-network:
+    external: true
+    name: n8n-mcp-connector_default
+
+volumes:
+  shared:

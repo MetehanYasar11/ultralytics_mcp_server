@@ -1,0 +1,32 @@
+# MCP Connector Container - Ultralytics MCP Server
+FROM node:18-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Install dependencies for Python execution and Docker CLI
+RUN apk add --no-cache \
+    python3 \
+    py3-pip \
+    docker-cli \
+    curl
+
+# Copy package.json and install Node.js dependencies
+COPY package.json ./
+RUN npm install --production
+
+# Copy the MCP server code
+COPY ultralytics-mcp-server.js ./
+
+# Create logs directory
+RUN mkdir -p /app/logs
+
+# Expose MCP server port
+EXPOSE 8092
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:8092/health || exit 1
+
+# Start the MCP server
+CMD ["node", "ultralytics-mcp-server.js"]
