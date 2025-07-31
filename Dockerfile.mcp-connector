@@ -11,12 +11,12 @@ RUN apk add --no-cache \
     docker-cli \
     curl
 
-# Copy package.json and install Node.js dependencies
+# Copy the source code
+COPY src/ ./src/
 COPY package.json ./
-RUN npm install --production
 
 # Copy the MCP server code
-COPY ultralytics-mcp-server.js ./
+COPY src/server.js ./src/
 
 # Create logs directory
 RUN mkdir -p /app/logs
@@ -29,4 +29,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:8092/health || exit 1
 
 # Start the MCP server
-CMD ["node", "ultralytics-mcp-server.js"]
+CMD ["node", "src/server.js"]

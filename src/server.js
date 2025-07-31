@@ -8,7 +8,7 @@ const { randomUUID } = require('node:crypto');
 const { exec } = require('child_process');
 const util = require('util');
 
-// Use absolute paths for MCP SDK (Docker environment)
+// Use Docker environment paths for MCP SDK
 const { McpServer } = require('/app/node_modules/@modelcontextprotocol/sdk/dist/cjs/server/mcp.js');
 const { SSEServerTransport } = require('/app/node_modules/@modelcontextprotocol/sdk/dist/cjs/server/sse.js');
 const { z } = require('zod');

@@ -1,20 +1,47 @@
 {
-  "name": "ultralytics-mcp-server-standalone",
+  "name": "ultralytics-mcp-server",
   "version": "1.0.0",
-  "description": "Ultralytics MCP Server for N8N - Standalone Docker Version",
-  "main": "ultralytics-mcp-server.js",
+  "description": "🚀 Ultralytics MCP Server - AI/ML Model Context Protocol server for YOLO object detection and computer vision tasks",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node ultralytics-mcp-server.js",
-    "test": "curl http://localhost:8092/health"
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "curl http://localhost:8092/health",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f mcp-connector"
   },
   "dependencies": {
     "express": "^4.18.2",
     "@modelcontextprotocol/sdk": "1.12.0",
     "zod": "^3.22.4"
   },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "mcp-server",
+    "ultralytics",
+    "yolo",
+    "computer-vision",
+    "ai",
+    "machine-learning",
+    "docker",
+    "model-context-protocol",
+    "object-detection"
+  ],
   "engines": {
     "node": ">=18.0.0"
   },
-  "author": "Master Thesis Project",
-  "license": "MIT"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MetehanYasar11/ultralytics_mcp_server.git"
+  },
+  "author": "MetehanYasar11",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/MetehanYasar11/ultralytics_mcp_server/issues"
+  },
+  "homepage": "https://github.com/MetehanYasar11/ultralytics_mcp_server#readme"
 }
