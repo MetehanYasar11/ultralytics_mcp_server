@@ -112,13 +112,17 @@ const createUltralyticsServer = () => {
           case 'detect':
           case 'predict':
             if (source) {
-              yoloCommand += `results = model.predict('${source}'); print(f"Detection completed. Found {len(results)} result(s).")`;
+              yoloCommand += `results = model.predict('${source}', save=True); print(f"Detection completed. Found {len(results)} result(s). Results saved to: {results[0].save_dir if hasattr(results[0], 'save_dir') else 'runs/detect/predict'}")`;
             } else {
               yoloCommand += `print(f"Model {model} loaded and ready for detection")`;
             }
             break;
           case 'train':
-            yoloCommand += `print(f"Training setup ready for {model}")`;
+            if (source) {
+              yoloCommand += `results = model.train(data='${source}', epochs=3, imgsz=640, save=True); print(f"Training completed! Results saved to: {results.save_dir if hasattr(results, 'save_dir') else 'runs/detect/train'}")`;
+            } else {
+              yoloCommand += `results = model.train(data='coco8.yaml', epochs=3, imgsz=640, save=True); print(f"Training completed with coco8 dataset! Results saved to: {results.save_dir if hasattr(results, 'save_dir') else 'runs/detect/train'}")`;
+            }
             break;
         }
         

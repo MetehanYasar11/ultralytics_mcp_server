@@ -8,6 +8,7 @@ services:
     container_name: ultralytics-container
     volumes:
       - ./ultralytics:/workspace
+      - ./results:/ultralytics/runs
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
