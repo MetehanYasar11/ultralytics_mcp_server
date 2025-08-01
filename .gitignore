@@ -28,4 +28,17 @@ Thumbs.db
 
 # Temporary files
 *.tmp
+
+# Training results and outputs
+results/
+runs/
+weights/
+*.pt
+*.onnx
+
+# Ultralytics cache
+.ultralytics/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
 *.temp

@@ -9,13 +9,28 @@ Ultralytics YOLO modelleri için N8N entegrasyonu sağlayan **Model Context Prot
 
 ## 🎯 Özellikler
 
-- ✅ **Gerçek YOLO İşlemleri**: Mock değil, gerçek Ultralytics container'da çalışan YOLO modelleri
+### 🚀 AI & Machine Learning
+- ✅ **Gerçek YOLO İşlemleri**: Mock değil, gerçek Ultralytics 8.3.171 container'da çalışan YOLO modelleri
+- ✅ **Multi-Model Support**: YOLO v8, v9, v10, v11 + custom trained models desteği
+- ✅ **Real-time Processing**: Base64 encoding ile güvenli Python execution
+- ✅ **Custom Model Integration**: Kendi eğittiğiniz modelleri kullanabilme
+
+### 🌐 Web Interfaces & Monitoring
+- ✅ **Enhanced Streamlit UI**: Custom model scanning ve modern web arayüzü
+- ✅ **Native TensorBoard**: Training süreçlerini görselleştirme
+- ✅ **Jupyter Lab**: Interactive development environment
+- ✅ **Auto-startup Services**: Container başladığında tüm servisler otomatik ayağa kalkar
+
+### 🔗 Integration & DevOps
 - ✅ **N8N Entegrasyonu**: SSE transport ile direct N8N workflow entegrasyonu
 - ✅ **Docker Tabanlı**: İzole ve güvenli container environment
-- ✅ **Multi-Model Support**: YOLO v8, v9, v10, v11 desteği
-- ✅ **Real-time Processing**: Base64 encoding ile güvenli Python execution
+- ✅ **7 MCP Tools**: Comprehensive AI workflow automation
 - ✅ **Error Handling**: Kapsamlı hata yönetimi ve logging
 - ✅ **Health Monitoring**: Container durumu ve connection monitoring
+
+### 📊 Solutions Framework
+- ✅ **15+ Ready AI Apps**: Ultralytics Solutions ile hazır AI uygulamaları
+- ✅ **Production Ready**: GPU acceleration ile yüksek performans
 
 ## 🚀 Hızlı Başlangıç
 
@@ -44,7 +59,16 @@ docker-compose up -d
 docker-compose logs -f
 ```
 
-### 3. Bağlantı Kontrolü
+### 3. Web Arayüzlerine Erişim
+
+Container başlatıldıktan sonra aşağıdaki arayüzlere erişebilirsiniz:
+
+- **🌐 Streamlit UI**: http://localhost:8501 - Enhanced custom model interface
+- **📊 TensorBoard**: http://localhost:6006 - Training visualization 
+- **📓 Jupyter Lab**: http://localhost:8888 - Interactive development
+- **🔧 MCP Health**: http://localhost:8092/health - Service status
+
+### 4. Bağlantı Kontrolü
 
 ```bash
 # Health check
@@ -54,7 +78,7 @@ curl http://localhost:8092/health
 curl http://localhost:8092/sse
 ```
 
-### 4. N8N'de Kullanım
+### 5. N8N'de Kullanım
 
 N8N'de **MCP** node ekleyin ve aşağıdaki URL'yi kullanın:
 
@@ -64,7 +88,7 @@ http://localhost:8092/sse
 
 ## 📚 Kullanım Kılavuzu
 
-### Mevcut MCP Tools
+### 7 MCP Tools ile Kapsamlı AI Workflow
 
 #### 1. `execute_python`
 **Açıklama**: Ultralytics container'da Python kodu çalıştırır  
@@ -107,6 +131,31 @@ print("Model loaded successfully!")
 - `image_url` (string) - Görüntü URL'si
 - `model` (string, default: "yolo11n-pose.pt") - Pose model
 
+#### 6. `launch_streamlit_interface`
+**Açıklama**: Enhanced Streamlit web arayüzünü başlatır  
+**Parametreler**: Yok - Otomatik custom model scanning ile
+
+#### 7. `get_system_info`
+**Açıklama**: Container sistem bilgilerini getirir  
+**Parametreler**: Yok - GPU, memory, disk bilgileri
+
+## 🌐 Web Arayüzleri
+
+### Streamlit Enhanced Interface
+- **URL**: http://localhost:8501
+- **Özellikler**: Custom model scanning, modern UI, file upload
+- **Desteklenen Modeller**: YOLO11, custom trained models
+
+### TensorBoard Visualization  
+- **URL**: http://localhost:6006
+- **Özellikler**: Training metrics, loss curves, model graphs
+- **Otomatik Başlatma**: Container startup ile birlikte
+
+### Jupyter Lab Development
+- **URL**: http://localhost:8888
+- **Özellikler**: Interactive Python environment, notebook support
+- **Pre-installed**: Ultralytics, all dependencies
+
 ### N8N Workflow Örnekleri
 
 #### Basit Object Detection
@@ -128,7 +177,41 @@ return detections.map(detection => ({
 }));
 ```
 
+## 🎯 Ultralytics Solutions Framework
+
+Bu proje **15+ hazır AI uygulaması** ile birlikte gelir. Streamlit arayüzünden erişebileceğiniz Solutions:
+
+### 🔍 Detection & Tracking
+- **Object Counting**: Gerçek zamanlı nesne sayma
+- **Object Tracking**: Multi-object tracking (ByteTrack, BoT-SORT)
+- **Speed Estimation**: Nesne hız ölçümü
+- **Distance Calculation**: Mesafe hesaplaması
+
+### 🛡️ Security & Monitoring  
+- **Security Alarm**: Güvenlik alarm sistemi
+- **Queue Management**: Kuyruk yönetimi
+- **Region Counting**: Bölgesel nesne sayma
+- **Analytics Dashboard**: Analitik kontrol paneli
+
+### 🏭 Industrial Applications
+- **Workzone Monitoring**: İş alanı takibi
+- **PPE Detection**: Kişisel koruyucu ekipman tespiti
+- **Pose Estimation**: İnsan duruş analizi
+- **Instance Segmentation**: Pixel-level segmentasyon
+
+### 📱 Interactive Features
+- **Live Inference**: Gerçek zamanlı çıkarım
+- **Custom Model Upload**: Kendi modelinizi yükleyin
+- **Batch Processing**: Toplu görüntü işleme
+- **Export Results**: Sonuçları dışa aktarma
+
 ## 🔧 Konfigürasyon
+
+### Otomatik Servis Başlatma
+Container başlatıldığında otomatik olarak şu servisler çalışır:
+- **TensorBoard**: Port 6006
+- **Streamlit**: Port 8501  
+- **Jupyter Lab**: Port 8888
 
 ### Docker Compose Ayarları
 
@@ -136,16 +219,21 @@ return detections.map(detection => ({
 # docker-compose.yml
 version: '3.8'
 services:
-  ultralytics-container:
-    image: ultralytics/ultralytics:latest
-    # GPU desteği için uncomment edin
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+  ultralytics:
+    command: bash -c "/usr/local/bin/startup.sh || sleep infinity"
+    ports:
+      - "8888:8888"  # Jupyter Lab
+      - "6006:6006"  # TensorBoard  
+      - "8501:8501"  # Streamlit
+    # GPU desteği
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
   
   mcp-connector:
     build: .
@@ -388,6 +476,22 @@ cap.release()
 cv2.destroyAllWindows()
 ```
 
+## 🚀 Yenilikler (v2.0)
+
+### ✨ Son Güncellemeler
+- **🔄 Otomatik Servis Başlatma**: Container boot'ta tüm servisler otomatik ayağa kalkar
+- **🎯 Enhanced Streamlit**: Custom model scanning ve modern UI
+- **📊 Native TensorBoard**: Ultralytics 8.3.171 ile built-in TensorBoard desteği  
+- **🛠️ 7 MCP Tools**: Comprehensive AI workflow automation
+- **🏭 Solutions Framework**: 15+ hazır AI uygulaması
+- **🔧 System Info Tool**: Container sistem bilgileri ve monitoring
+
+### 🎯 Performance Optimizations
+- CUDA 12.4.1 ile GPU acceleration
+- RTX 5070 Ti optimize edilmiş configuration
+- Memory efficient processing
+- Background service management
+
 ## 🤝 Katkıda Bulunma
 
 1. Fork'layın
@@ -403,7 +507,7 @@ Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICE
 ## 🙏 Teşekkürler
 
 - [Ultralytics](https://ultralytics.com) - YOLO implementasyonu
-- [N8N](https://n8n.io) - Workflow automation
+- [N8N](https://n8n.io) - Workflow automation  
 - [Model Context Protocol](https://modelcontextprotocol.io) - MCP specification
 
 ## 📞 Destek
