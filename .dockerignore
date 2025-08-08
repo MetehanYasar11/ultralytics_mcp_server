@@ -1,0 +1,41 @@
+# Node modules and logs
+node_modules/
+*.log
+npm-debug.log*
+
+# Git files
+.git/
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Development files
+.vscode/
+.continue/
+
+# Data directories
+datasets/
+workspace/
+ultralytics/runs/
+openwebui_data/
+openwebui_docs/
+
+# Docker files (don't copy other dockerfiles into context)
+docker-compose*.yml
+Dockerfile.mcp-connector
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/

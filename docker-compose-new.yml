@@ -1,0 +1,73 @@
+services:
+  # DENTEX AI Platform - Main Application
+  dentex-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile.ultralytics
+    container_name: dentex-ai-platform
+    volumes:
+      # Workspace for trained models
+      - trained_models:/workspace/trained_models
+      # DENTEX dataset (mount your DENTEX folder here)
+      - ../DENTEX:/DENTEX:ro
+      # Custom datasets volume
+      - custom_datasets:/ultralytics/custom_datasets
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - CUDA_VISIBLE_DEVICES=0
+    runtime: nvidia
+    gpus: all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "8501:8501"  # Streamlit Web Interface
+      - "8888:8888"  # Jupyter (optional)
+    command: >
+      bash -c "
+        mkdir -p /workspace/trained_models &&
+        mkdir -p /ultralytics/custom_datasets &&
+        cd /ultralytics &&
+        streamlit run main_dashboard.py --server.address 0.0.0.0 --server.port 8501 --server.headless true --server.enableCORS false --server.enableXsrfProtection false --server.maxUploadSize 200
+      "
+    stdin_open: true
+    tty: true
+    shm_size: '8gb'
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    networks:
+      - dentex-network
+    restart: unless-stopped
+
+  # MCP Server for N8N Integration (Optional)
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp-connector
+    container_name: dentex-mcp-server
+    ports:
+      - "8092:8092"  # MCP Server endpoint
+    environment:
+      - NODE_ENV=production
+      - ULTRALYTICS_CONTAINER=dentex-ai-platform
+    networks:
+      - dentex-network
+    restart: unless-stopped
+    depends_on:
+      - dentex-ai
+
+volumes:
+  trained_models:
+    driver: local
+  custom_datasets:
+    driver: local
+
+networks:
+  dentex-network:
+    driver: bridge

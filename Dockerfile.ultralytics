@@ -42,14 +42,11 @@ ADD https://github.com/ultralytics/assets/releases/download/v0.0.0/Arial.ttf \
 # Create working directory
 WORKDIR /ultralytics
 
-# Copy project files
-COPY . .
-
 # Install PyTorch nightly for CUDA 12.9 (exact match for your nvidia-smi output)
 RUN pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu129
 
 # Install ultralytics and dependencies directly from PyPI
-RUN pip install ultralytics albumentations faster-coco-eval tensorrt wandb jupyter tensorboard pandas streamlit
+RUN pip install ultralytics albumentations faster-coco-eval tensorrt wandb jupyter tensorboard pandas streamlit pillow pyyaml
 
 # Download YOLO model
 ADD https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt .
@@ -58,19 +55,20 @@ ADD https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt .
 RUN mkdir -p /root/.config/Ultralytics && \
     echo '{"tensorboard": true, "wandb": false, "clearml": false, "comet": false, "dvc": false, "hub": true, "mlflow": false, "neptune": false, "raytune": false}' > /root/.config/Ultralytics/settings.json
 
-# Configure Streamlit settings
-RUN mkdir -p /workspace/.streamlit
-COPY streamlit_config.toml /workspace/.streamlit/config.toml
-
-# Copy enhanced Streamlit app
-COPY enhanced_streamlit_inference.py /workspace/enhanced_streamlit_inference.py
-
-# Copy and set up startup script
+# Copy startup script
 COPY startup.sh /usr/local/bin/startup.sh
 RUN chmod +x /usr/local/bin/startup.sh
 
-# Expose Jupyter, TensorBoard and Streamlit ports
-EXPOSE 8888 6006 8501
+# Copy main dashboard
+COPY main_dashboard.py /ultralytics/
+COPY pages/ /ultralytics/pages/
 
-# Default command - use startup script
+# Create workspace directory structure
+RUN mkdir -p /workspace && \
+    mkdir -p /ultralytics/runs
+
+# Expose ports
+EXPOSE 8501 8888 6006
+
+# Default command - run startup script
 CMD ["/usr/local/bin/startup.sh"]
