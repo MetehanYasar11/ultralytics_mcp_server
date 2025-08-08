@@ -60,11 +60,26 @@ def get_available_models():
     
     # Get YOLO pre-trained models
     yolo_models = [
+        # YOLO11 Series
         {'name': 'yolo11n.pt', 'path': 'yolo11n.pt', 'type': 'YOLO11 Nano', 'size': '5.8 MB'},
         {'name': 'yolo11s.pt', 'path': 'yolo11s.pt', 'type': 'YOLO11 Small', 'size': '19.8 MB'},
         {'name': 'yolo11m.pt', 'path': 'yolo11m.pt', 'type': 'YOLO11 Medium', 'size': '40.8 MB'},
         {'name': 'yolo11l.pt', 'path': 'yolo11l.pt', 'type': 'YOLO11 Large', 'size': '52.8 MB'},
-        {'name': 'yolo11x.pt', 'path': 'yolo11x.pt', 'type': 'YOLO11 Extra Large', 'size': '68.2 MB'}
+        {'name': 'yolo11x.pt', 'path': 'yolo11x.pt', 'type': 'YOLO11 Extra Large', 'size': '68.2 MB'},
+        
+        # YOLOv8 Series
+        {'name': 'yolov8n.pt', 'path': 'yolov8n.pt', 'type': 'YOLOv8 Nano', 'size': '6.2 MB'},
+        {'name': 'yolov8s.pt', 'path': 'yolov8s.pt', 'type': 'YOLOv8 Small', 'size': '21.5 MB'},
+        {'name': 'yolov8m.pt', 'path': 'yolov8m.pt', 'type': 'YOLOv8 Medium', 'size': '49.7 MB'},
+        {'name': 'yolov8l.pt', 'path': 'yolov8l.pt', 'type': 'YOLOv8 Large', 'size': '83.7 MB'},
+        {'name': 'yolov8x.pt', 'path': 'yolov8x.pt', 'type': 'YOLOv8 Extra Large', 'size': '136.7 MB'},
+        
+        # YOLOv9 Series
+        {'name': 'yolov9t.pt', 'path': 'yolov9t.pt', 'type': 'YOLOv9 Tiny', 'size': '4.8 MB'},
+        {'name': 'yolov9s.pt', 'path': 'yolov9s.pt', 'type': 'YOLOv9 Small', 'size': '15.8 MB'},
+        {'name': 'yolov9m.pt', 'path': 'yolov9m.pt', 'type': 'YOLOv9 Medium', 'size': '43.0 MB'},
+        {'name': 'yolov9c.pt', 'path': 'yolov9c.pt', 'type': 'YOLOv9 Compact', 'size': '51.0 MB'},
+        {'name': 'yolov9e.pt', 'path': 'yolov9e.pt', 'type': 'YOLOv9 Extended', 'size': '115.0 MB'}
     ]
     
     models.extend(yolo_models)

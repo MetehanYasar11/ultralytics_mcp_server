@@ -8,6 +8,10 @@ services:
     volumes:
       - ./ultralytics:/ultralytics
       - ./workspace:/workspace
+      - ./YOLO_MultiLevel_Datasets:/DENTEX/YOLO_MultiLevel_Datasets:ro
+      - custom_datasets:/ultralytics/custom_datasets
+      - ./YOLO_MultiLevel_Datasets:/ultralytics/YOLO_MultiLevel_Datasets:ro
+      - trained_models:/workspace/trained_models
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
@@ -28,6 +32,8 @@ services:
     command: bash -c "/usr/local/bin/startup.sh || sleep infinity"
     stdin_open: true
     tty: true
+    shm_size: '8gb'
+    restart: unless-stopped
     networks:
       - ultralytics-network
 
@@ -52,6 +58,12 @@ services:
     depends_on:
       - ultralytics-container
     command: ["npm", "start"]
+
+volumes:
+  custom_datasets:
+    driver: local
+  trained_models:
+    driver: local
 
 networks:
   ultralytics-network:

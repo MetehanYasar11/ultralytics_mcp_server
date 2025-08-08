@@ -33,7 +33,7 @@ services:
         mkdir -p /workspace/trained_models &&
         mkdir -p /ultralytics/custom_datasets &&
         cd /ultralytics &&
-        streamlit run main_dashboard.py --server.address 0.0.0.0 --server.port 8501 --server.headless true --server.enableCORS false --server.enableXsrfProtection false --server.maxUploadSize 200
+        streamlit run main_dashboard.py --server.address 0.0.0.0 --server.port 8501 --server.headless true --server.enableCORS false --server.enableXsrfProtection false --server.maxUploadSize 10000
       "
     stdin_open: true
     tty: true

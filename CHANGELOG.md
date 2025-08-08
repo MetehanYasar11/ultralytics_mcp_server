@@ -2,7 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0.0] - 2025-08-08
+## [Latest] - 2025-08-09
+
+### ✨ Added
+- **YOLO11 Model Variant Selection**: Choose from yolo11n/s/m/l/x base models in training interface
+- **Smart Model Info Display**: Real-time parameter count and GFLOPs information for each variant
+- **Enhanced Training UI**: Improved model selection with descriptive labels and performance hints
+
+### 🔧 Improved
+- **Streamlined Model Selection**: Focused on YOLO11 variants instead of mixed model families
+- **Training Configuration Summary**: Clear display of selected base model in training overview
+- **Consistent UI**: Synchronized both training pages (root and ultralytics folders)
+
+### 🐛 Fixed
+- **Model Reference Bug**: Fixed undefined model name in training summary
+- **UI Consistency**: Aligned model selection across duplicate training pages
+
+---
+
+## [1.0.0] - 2025-01-15
 
 ### 🎉 Initial Release
 - Complete Ultralytics MCP Server implementation

@@ -150,6 +150,11 @@ def get_workspace_models():
     except:
         return 0
 
+def get_available_pretrained_models():
+    """Get count of available pre-trained YOLO models"""
+    # Count of all available YOLO variants
+    return 17  # 5 YOLO11 + 5 YOLOv8 + 5 YOLOv9 + 2 special variants
+
 # Header
 st.markdown("""
 <div style="background: linear-gradient(90deg, #0066CC 0%, #004499 100%); color: white; 
@@ -197,6 +202,7 @@ system_stats = get_system_stats()
 training_active = check_training_status()
 latest_training = get_latest_training_results()
 model_count = get_workspace_models()
+pretrained_models = get_available_pretrained_models()
 
 # Status Overview
 col1, col2, col3, col4 = st.columns(4)
@@ -218,7 +224,8 @@ with col2:
         st.metric("💾 GPU Memory", "N/A", delta="No GPU")
 
 with col3:
-    st.metric("🤖 Trained Models", str(model_count), delta="In Workspace")
+    total_models = model_count + pretrained_models
+    st.metric("🤖 Available Models", str(total_models), delta=f"{model_count} Custom + {pretrained_models} Pre-trained")
 
 with col4:
     if latest_training:

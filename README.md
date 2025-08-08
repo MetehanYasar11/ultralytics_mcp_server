@@ -1,50 +1,109 @@
-# 🚀 Ultralytics MCP Server - AI-Powered Computer Vision Platform
+# 🦷 DENTEX AI Platform - Ultralytics MCP Server
 
-> **Unified Development Platform for YOLO Models with N8N Integration**
+> **Advanced AI-powered dental X-ray detection platform with intelligent dataset upload, custom model training, and MCP integration for N8N automation.**
 
-A comprehensive Model Context Protocol (MCP) server that seamlessly integrates Ultralytics YOLO models with N8N workflows, providing a complete AI-powered computer vision solution in a single command.
+A comprehensive Model Context Protocol (MCP) server that seamlessly integrates Ultralytics YOLO models with N8N workflows, providing a complete AI-powered computer vision solution with 10GB dataset upload support and intelligent background processing.
 
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 [![CUDA](https://img.shields.io/badge/CUDA-12.4.1-green.svg)](https://developer.nvidia.com/cuda-downloads)
 [![Streamlit](https://img.shields.io/badge/Streamlit-UI-red.svg)](https://streamlit.io/)
 [![N8N](https://img.shields.io/badge/N8N-Integration-orange.svg)](https://n8n.io/)
 
-## ✨ Features
+## ✨ Key Features
 
 ### 🎯 Core Capabilities
-- **7 AI-Powered Tools** for comprehensive YOLO operations
-- **Real-time Object Detection** with live inference
-- **Model Training & Fine-tuning** with custom datasets
-- **Performance Analytics** via TensorBoard integration
-- **N8N Workflow Integration** for automation
+- **🔬 Advanced AI Detection**: YOLO-based dental X-ray analysis
+- **📦 Smart Dataset Upload**: 10GB limit with intelligent ZIP structure detection  
+- **🎯 Custom Model Training**: Train your own models with any YOLO dataset
+- **🤖 YOLO11 Model Variants**: Choose from nano/small/medium/large/x-large base models
+- **⚡ GPU Acceleration**: NVIDIA CUDA support for fast training/inference
+- **🌐 Web Interface**: Beautiful Streamlit dashboard
+- **📊 Real-time Monitoring**: Live GPU stats and training progress
+- **🔌 MCP Integration**: Connect with N8N for workflow automation
+- **🛡️ Background Processing**: Stable upload handling for large files
 
-### 🖥️ User Interfaces
-- **Streamlit Dashboard** - Interactive web interface for model management
-- **Jupyter Lab** - Notebook environment for development
-- **TensorBoard** - Real-time training metrics and visualization
-- **N8N Integration** - Workflow automation and AI task orchestration
+## � Quick Start
 
-### 🔧 Technical Stack
-- **CUDA 12.4.1** - GPU acceleration for training and inference
-- **PyTorch** - Deep learning framework with CUDA support
-- **Ultralytics YOLO** - State-of-the-art object detection models
-- **Docker** - Containerized deployment
-- **Node.js MCP Server** - Model Context Protocol implementation
+### One-Command Setup
 
-## 🚀 Quick Start
-
-### Prerequisites
-- Docker Desktop with GPU support
-- NVIDIA drivers compatible with CUDA 12.4.1
-- Windows PowerShell or Linux/macOS terminal
-
-### One-Command Deployment
-
+**For Windows users:**
 ```bash
-docker-compose up -d
+setup.bat
 ```
 
-That's it! The entire platform will be available at:
+**For Linux/Mac users:**
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+**Manual setup:**
+```bash
+docker-compose up --build -d
+```
+
+### Access the Platform
+
+- **🌐 Main Interface**: http://localhost:8501
+- **📊 TensorBoard**: http://localhost:6006  
+- **🔌 MCP Server**: http://localhost:8092
+- **📓 Jupyter**: http://localhost:8888
+
+## � Requirements
+
+- **Docker & Docker Compose**
+- **NVIDIA Docker Runtime** (for GPU support)
+- **8GB+ RAM** recommended
+- **50GB+ free disk space**
+
+## 🎯 Dataset Upload
+
+### Supported ZIP Structures
+
+The platform automatically detects and organizes various ZIP structures:
+
+```
+✅ Structure 1 (Flat):
+dataset.zip
+├── data.yaml
+├── images/
+│   ├── img1.jpg
+│   └── img2.jpg
+└── labels/
+    ├── img1.txt
+    └── img2.txt
+
+✅ Structure 2 (Nested):
+dataset.zip
+└── my_dataset/
+    ├── data.yaml
+    ├── images/
+    │   ├── train/
+    │   └── val/
+    └── labels/
+        ├── train/
+        └── val/
+
+✅ Structure 3 (Split folders):
+dataset.zip
+├── data.yaml
+├── train/
+│   ├── images/
+│   └── labels/
+└── val/
+    ├── images/
+    └── labels/
+```
+
+### Upload Process
+
+1. Navigate to **Training** page
+2. Click **Upload Custom Dataset**
+3. Select your ZIP file (up to 10GB)
+4. Enter dataset name
+5. Click **Upload Dataset**
+6. **Do NOT refresh** during processing
+7. Wait for completion message
 
 - 🌐 **Streamlit UI**: http://localhost:8501
 - 📊 **TensorBoard**: http://localhost:6006  
@@ -128,14 +187,36 @@ Edit `docker-compose.yml` to customize:
 ### Object Detection via Streamlit
 1. Navigate to http://localhost:8501
 2. Upload an image or video
-3. Select YOLO model (YOLOv8, YOLOv11)
-4. Run inference and view results
+3. Select YOLO model variant and confidence threshold
+4. Run inference and view annotated results
+
+### Training Custom Models with YOLO11 Variants
+1. Go to **Training** page in Streamlit
+2. Upload custom dataset or select DENTEX built-in datasets
+3. Choose **YOLO11 Model Variant**:
+   - **yolo11n**: Fast training, good for testing (1.9M parameters)
+   - **yolo11s**: Balanced performance (9.1M parameters)
+   - **yolo11m**: Better accuracy (20.1M parameters) 
+   - **yolo11l**: High accuracy training (25.3M parameters)
+   - **yolo11x**: Maximum accuracy (43.9M parameters)
+4. Configure epochs, batch size, image size
+5. Monitor real-time training progress with live GPU stats
+6. Models automatically save to workspace
 
 ### Training Custom Models
-1. Access Jupyter Lab at http://localhost:8888
-2. Prepare your dataset in YOLO format
-3. Use the training interface in Streamlit
-4. Monitor progress in TensorBoard
+1. Access Training page in Streamlit interface
+2. Select **YOLO11 Model Variant** (nano/small/medium/large/x-large)
+3. Choose your dataset (DENTEX built-in or custom upload)
+4. Configure training parameters (epochs, batch size, image size)
+5. Click **Start Training** and monitor progress
+6. Models auto-save to workspace for later use
+
+**Model Variant Selection:**
+- **yolo11n.pt** - Nano: Fastest, lowest accuracy (1.9M params)
+- **yolo11s.pt** - Small: Good balance (9.1M params) 
+- **yolo11m.pt** - Medium: Better accuracy (20.1M params)
+- **yolo11l.pt** - Large: High accuracy (25.3M params)
+- **yolo11x.pt** - X-Large: Highest accuracy (43.9M params)
 
 ### N8N Automation
 1. Create N8N workflow

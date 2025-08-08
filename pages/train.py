@@ -74,7 +74,7 @@ def get_nvidia_smi_info():
 
 def get_dentex_datasets():
     """Get available DENTEX datasets"""
-    dentex_path = Path("/DENTEX/YOLO_MultiLevel_Datasets")
+    dentex_path = Path("/ultralytics/YOLO_MultiLevel_Datasets")
     if not dentex_path.exists():
         return []
     
@@ -86,7 +86,7 @@ def get_dentex_datasets():
                 datasets.append({
                     'name': folder.name,
                     'path': str(yaml_file),
-                    'description': folder.name.replace("YOLO_", "").replace("_", " ")
+                    'description': f"DENTEX: {folder.name.replace('YOLO_', '').replace('_', ' ')}"
                 })
     return datasets
 
@@ -108,75 +108,115 @@ def get_custom_datasets():
                 })
     return datasets
 
-def validate_yolo_dataset(zip_path):
-    """Validate uploaded YOLO dataset"""
-    try:
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            file_list = zip_ref.namelist()
-            
-            # Check for required structure
-            has_images = any('images/' in f for f in file_list)
-            has_labels = any('labels/' in f for f in file_list)
-            has_data_yaml = any(f.endswith('data.yaml') or f.endswith('data.yml') for f in file_list)
-            
-            if not (has_images and has_labels and has_data_yaml):
-                return False, "Dataset must contain images/, labels/ folders and data.yaml file"
-            
-            return True, "Valid YOLO dataset structure"
-    except Exception as e:
-        return False, f"Error validating dataset: {str(e)}"
-
 def extract_custom_dataset(uploaded_file, dataset_name):
-    """Extract and setup custom dataset"""
+    """Extract and setup custom dataset using background processing"""
+    import subprocess
+    import json
+    
     try:
-        # Create custom datasets directory
-        custom_datasets_dir = Path("/ultralytics/custom_datasets")
-        custom_datasets_dir.mkdir(exist_ok=True)
+        # Create upload directory
+        upload_dir = Path("/tmp/streamlit_uploads")
+        upload_dir.mkdir(exist_ok=True)
         
-        dataset_dir = custom_datasets_dir / dataset_name
-        if dataset_dir.exists():
-            shutil.rmtree(dataset_dir)
-        dataset_dir.mkdir()
+        # Generate unique filenames
+        timestamp = int(time.time())
+        upload_file_path = upload_dir / f"upload_{dataset_name}_{timestamp}.zip"
+        status_file = upload_dir / f"status_{dataset_name}_{timestamp}.json"
         
-        # Save uploaded file
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
-            tmp_file.write(uploaded_file.getvalue())
-            tmp_path = tmp_file.name
-        
-        # Validate dataset
-        is_valid, message = validate_yolo_dataset(tmp_path)
-        if not is_valid:
-            os.unlink(tmp_path)
-            return False, message
-        
-        # Extract dataset
-        with zipfile.ZipFile(tmp_path, 'r') as zip_ref:
-            zip_ref.extractall(dataset_dir)
-        
-        # Update data.yaml paths
-        data_yaml_files = list(dataset_dir.rglob("data.yaml")) + list(dataset_dir.rglob("data.yml"))
-        if data_yaml_files:
-            data_yaml = data_yaml_files[0]
-            with open(data_yaml, 'r') as f:
-                config = yaml.safe_load(f)
+        # Save uploaded file directly to disk without loading to memory
+        st.info("💾 Saving file to disk...")
+        with open(upload_file_path, 'wb') as tmp_file:
+            uploaded_file.seek(0)
             
-            # Update paths to be absolute
-            base_path = str(dataset_dir)
-            if 'train' in config:
-                config['train'] = os.path.join(base_path, config['train'])
-            if 'val' in config:
-                config['val'] = os.path.join(base_path, config['val'])
-            if 'test' in config:
-                config['test'] = os.path.join(base_path, config['test'])
-            
-            with open(data_yaml, 'w') as f:
-                yaml.dump(config, f)
+            # Read in chunks to avoid memory issues
+            chunk_size = 1024 * 1024  # 1MB chunks
+            while True:
+                chunk = uploaded_file.read(chunk_size)
+                if not chunk:
+                    break
+                tmp_file.write(chunk)
         
-        os.unlink(tmp_path)
-        return True, f"Dataset '{dataset_name}' uploaded successfully"
+        st.info("✅ File saved. Starting background processing...")
+        
+        # Start background processor
+        cmd = [
+            "python3", "/ultralytics/upload_processor.py",
+            str(upload_file_path), dataset_name, str(status_file)
+        ]
+        
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd="/ultralytics"
+        )
+        
+        # Monitor progress
+        max_wait_time = 600  # 10 minutes max
+        start_time = time.time()
+        
+        progress_placeholder = st.empty()
+        
+        while True:
+            elapsed = time.time() - start_time
+            if elapsed > max_wait_time:
+                process.terminate()
+                return False, "Upload timeout (10 minutes exceeded)"
+            
+            # Check if process is still running
+            poll_result = process.poll()
+            
+            # Read status file
+            if status_file.exists():
+                try:
+                    with open(status_file, 'r') as f:
+                        status_data = json.load(f)
+                    
+                    status = status_data.get('status', 'unknown')
+                    message = status_data.get('message', 'Processing...')
+                    
+                    progress_placeholder.info(f"🔄 {message}")
+                    
+                    if status == 'completed':
+                        # Clean up status file
+                        try:
+                            os.unlink(status_file)
+                        except:
+                            pass
+                        return True, message
+                    elif status == 'error':
+                        # Clean up status file
+                        try:
+                            os.unlink(status_file)
+                        except:
+                            pass
+                        return False, message
+                        
+                except (json.JSONDecodeError, FileNotFoundError):
+                    pass
+            
+            # If process finished but no status, check return code
+            if poll_result is not None:
+                if poll_result == 0:
+                    return True, f"Dataset '{dataset_name}' uploaded successfully"
+                else:
+                    # Get error from stderr
+                    _, stderr = process.communicate()
+                    error_msg = stderr.decode() if stderr else "Unknown error"
+                    return False, f"Upload failed: {error_msg}"
+            
+            time.sleep(2)  # Check every 2 seconds
         
     except Exception as e:
-        return False, f"Error extracting dataset: {str(e)}"
+        # Cleanup on error
+        for cleanup_file in [upload_file_path, status_file]:
+            try:
+                if 'cleanup_file' in locals() and cleanup_file.exists():
+                    os.unlink(cleanup_file)
+            except:
+                pass
+        
+        return False, f"Error starting upload: {str(e)}"
 
 def check_training_status():
     """Check if training is currently running"""
@@ -293,23 +333,85 @@ with st.sidebar:
     
     # Custom dataset upload
     with st.expander("📁 Upload Custom Dataset"):
+        st.markdown("""
+        **📋 Dataset Structure Requirements:**
+        
+        Your ZIP file should contain:
+        ```
+        dataset.zip
+        ├── data.yaml          # Dataset configuration file
+        ├── images/            # Training images directory
+        │   ├── img1.jpg
+        │   ├── img2.jpg
+        │   └── ...
+        └── labels/            # YOLO annotation files
+            ├── img1.txt
+            ├── img2.txt
+            └── ...
+        ```
+        
+        **✅ Supported Structures:**
+        - `data.yaml` can be at any level in ZIP
+        - System will auto-detect and organize structure
+        - Supports nested folders (e.g., `mydataset/images/`, `train/images/`)
+        - Maximum file size: **10GB**
+        """)
+        
         uploaded_file = st.file_uploader(
             "Choose a YOLO dataset ZIP file",
             type=['zip'],
-            help="Upload a ZIP file containing YOLO format dataset (images/, labels/, data.yaml)"
+            help="System will automatically detect and organize your dataset structure"
         )
         
         if uploaded_file is not None:
+            # Get file size safely without loading entire file into memory
+            file_size_mb = uploaded_file.size / (1024*1024) if hasattr(uploaded_file, 'size') else 0
+            st.info(f"📦 **Selected file:** {uploaded_file.name} ({file_size_mb:.1f} MB)")
+            
             dataset_name = st.text_input("Dataset Name", value="my_custom_dataset")
             
-            if st.button("🚀 Upload Dataset"):
-                with st.spinner("Uploading and extracting dataset..."):
-                    success, message = extract_custom_dataset(uploaded_file, dataset_name)
-                    if success:
-                        st.success(message)
-                        st.rerun()
-                    else:
-                        st.error(message)
+            # Add warning for large files
+            if file_size_mb > 500:  # > 500MB
+                st.warning("⚠️ **Large file detected!** Processing may take several minutes. Please:")
+                st.warning("• Do NOT refresh or close the browser during upload")
+                st.warning("• Wait for completion message before navigating away")
+                st.warning("• Ensure stable internet connection")
+            
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                upload_button = st.button("🚀 Upload Dataset", type="primary")
+            with col2:
+                if file_size_mb > 1000:  # > 1GB
+                    st.error("🔥 **Very large file!** Expected processing time: 5-15 minutes")
+            
+            if upload_button:
+                # Create a container for status updates
+                status_container = st.container()
+                progress_bar = st.progress(0)
+                
+                with status_container:
+                    st.info("� **Upload started!** Processing steps:")
+                    st.text("1️⃣ Saving file to disk...")
+                    st.text("2️⃣ Validating ZIP structure...")
+                    st.text("3️⃣ Extracting files...")
+                    st.text("4️⃣ Configuring dataset...")
+                    st.warning("⚠️ **Do NOT refresh the page during this process!**")
+                    
+                    with st.spinner("🔄 Processing dataset... This may take several minutes for large files."):
+                        try:
+                            success, message = extract_custom_dataset(uploaded_file, dataset_name)
+                            if success:
+                                st.success(f"✅ {message}")
+                                st.balloons()
+                                st.rerun()
+                            else:
+                                st.error(f"❌ {message}")
+                        except Exception as e:
+                            st.error(f"❌ Upload failed: {str(e)}")
+                            st.error("💡 If the problem persists, try:")
+                            st.error("• Refreshing the page")
+                            st.error("• Using a smaller file")
+                            st.error("• Checking file format (ZIP with YOLO structure)")
     
     # Get all available datasets
     dentex_datasets = get_dentex_datasets()
@@ -327,6 +429,83 @@ with st.sidebar:
         help="Choose a dataset for training"
     )
     selected_dataset_path = dataset_options[selected_dataset_name]
+    
+    st.markdown("---")
+    
+    # Model Selection
+    st.markdown("### 🤖 Model Configuration")
+    
+    # Base Model Type Selection
+    model_type = st.selectbox(
+        "Base Model Type",
+        options=["Pre-trained YOLO", "Transfer Learning from Workspace"],
+        help="Choose between starting with a pre-trained YOLO model or using a previously trained model from workspace"
+    )
+    
+    if model_type == "Pre-trained YOLO":
+        # YOLO11 Variant Selection (n/s/m/l/x)
+        yolo11_variants = [
+            ("yolo11n", "Nano - Fastest, lowest accuracy"),
+            ("yolo11s", "Small - Good balance of speed/accuracy"),
+            ("yolo11m", "Medium - Better accuracy"),
+            ("yolo11l", "Large - High accuracy, slower"),
+            ("yolo11x", "X-Large - Highest accuracy, slowest"),
+        ]
+
+        variant_labels = [f"{name}.pt ({desc})" for name, desc in yolo11_variants]
+        selected_label = st.selectbox(
+            "YOLO11 Model Variant",
+            options=variant_labels,
+            index=0,
+            help="Select the YOLO11 base model variant to fine-tune"
+        )
+        # Map back to file name
+        selected_variant = selected_label.split(" ")[0].replace(".pt", "")
+        selected_model_path = f"{selected_variant}.pt"
+
+        # Model size info quick hint
+        size_key = selected_variant.replace("yolo11", "")
+        model_info = {
+            "n": {"params": "1.9M", "gflops": "4.3", "desc": "Fastest, lowest accuracy"},
+            "s": {"params": "9.1M", "gflops": "21.5", "desc": "Good balance of speed and accuracy"},
+            "m": {"params": "20.1M", "gflops": "51.0", "desc": "Better accuracy, moderate speed"},
+            "l": {"params": "25.3M", "gflops": "68.1", "desc": "High accuracy, slower training"},
+            "x": {"params": "43.9M", "gflops": "114.8", "desc": "Highest accuracy, slowest training"}
+        }
+        if size_key in model_info:
+            info = model_info[size_key]
+            st.info(f"📊 Model: {selected_variant}.pt — {info['params']} params, {info['gflops']} GFLOPs — {info['desc']}")
+        
+    else:  # Transfer Learning from Workspace
+        # Get workspace models
+        workspace_models = []
+        workspace_path = Path("/workspace/trained_models")
+        if workspace_path.exists():
+            model_files = list(workspace_path.glob("*.pt"))
+            workspace_models = [{"name": f.stem, "path": str(f)} for f in model_files if f.stat().st_size > 1000000]  # Only models > 1MB
+        
+        if workspace_models:
+            workspace_model_options = {f"🎯 {model['name']} (Workspace)": model['path'] for model in workspace_models}
+            
+            selected_workspace_model = st.selectbox(
+                "Workspace Model for Transfer Learning",
+                options=list(workspace_model_options.keys()),
+                help="Select a previously trained model from workspace for transfer learning"
+            )
+            selected_model_path = workspace_model_options[selected_workspace_model]
+            
+            # Show model file info
+            try:
+                model_path = Path(selected_model_path)
+                model_size_mb = model_path.stat().st_size / (1024*1024)
+                model_date = model_path.stat().st_mtime
+                st.info(f"📁 **Model:** {model_size_mb:.1f} MB, Modified: {time.strftime('%Y-%m-%d %H:%M', time.localtime(model_date))}")
+            except:
+                pass
+        else:
+            st.error("❌ No trained models found in workspace. Train a model first or use pre-trained YOLO models.")
+            selected_model_path = "yolo11n.pt"  # Fallback
+            model_type = "Pre-trained YOLO"  # Reset to pre-trained
     
     st.markdown("---")
     
@@ -432,8 +611,14 @@ with col1:
         st.subheader("Start New Training")
         
         # Configuration summary
+        if model_type == "Pre-trained YOLO":
+            model_info_text = f"**Base Model:** {selected_model_path}"
+        else:
+            model_info_text = f"**Transfer Learning:** {selected_workspace_model.replace('🎯 ', '').replace(' (Workspace)', '')}"
+            
         st.info(f"""
         **Selected Dataset:** {selected_dataset_name}  
+        **{model_info_text}**  
         **Epochs:** {epochs}  
         **Batch Size:** {batch_size}  
         **Image Size:** {img_size}px  
@@ -455,13 +640,16 @@ from pathlib import Path
 
 print("Starting training...")
 print(f"Dataset: {selected_dataset_path}")
+print(f"Base Model: {selected_model_path}")
+print(f"Model Type: {model_type}")
 print(f"Epochs: {epochs}")
 print(f"Batch: {batch_size}")
 print(f"Image size: {img_size}")
 print(f"Device: {device_option}")
 print(f"Model name: {model_name}")
 
-model = YOLO('yolo11n.pt')
+# Load the selected model
+model = YOLO('{selected_model_path}')
 
 time_str = datetime.now().strftime('%H%M%S')
 training_name = f'{training_prefix}_{{time_str}}'

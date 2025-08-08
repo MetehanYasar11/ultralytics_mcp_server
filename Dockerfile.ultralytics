@@ -57,15 +57,27 @@ RUN mkdir -p /root/.config/Ultralytics && \
 
 # Copy startup script
 COPY startup.sh /usr/local/bin/startup.sh
-RUN chmod +x /usr/local/bin/startup.sh
+RUN sed -i 's/\r$//' /usr/local/bin/startup.sh && chmod +x /usr/local/bin/startup.sh
 
-# Copy main dashboard
+# Copy main dashboard and pages
 COPY main_dashboard.py /ultralytics/
 COPY pages/ /ultralytics/pages/
 
-# Create workspace directory structure
+# Copy upload processor and monitoring tools
+COPY upload_processor.py /ultralytics/upload_processor.py
+COPY monitor.sh /usr/local/bin/monitor.sh
+RUN chmod +x /ultralytics/upload_processor.py && \
+    chmod +x /usr/local/bin/monitor.sh
+
+# Create directory structure
 RUN mkdir -p /workspace && \
-    mkdir -p /ultralytics/runs
+    mkdir -p /ultralytics/runs && \
+    mkdir -p /ultralytics/custom_datasets && \
+    mkdir -p /tmp/streamlit_uploads && \
+    mkdir -p /ultralytics/.streamlit
+
+# Copy Streamlit configuration
+COPY ultralytics/.streamlit/config.toml /ultralytics/.streamlit/config.toml
 
 # Expose ports
 EXPOSE 8501 8888 6006

@@ -489,7 +489,7 @@ if __name__ == "__main__":
             "--server.headless", "true",
             "--server.enableCORS", "false",
             "--server.enableXsrfProtection", "false",
-            "--server.maxUploadSize", "200"
+            "--server.maxUploadSize", "10000"
         ]
         
         process = subprocess.Popen(
