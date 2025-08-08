@@ -18,6 +18,25 @@ logs/
 .env.test.local
 .env.production.local
 
+# Large datasets - exclude from repository
+YOLO_MultiLevel_Datasets/
+*.png
+*.jpg
+*.jpeg
+*.zip
+
+# Cache files
+*.cache
+
+# PyTorch models
+*.pt
+*.pth
+
+# Workspace data
+workspace/
+ultralytics/runs/
+ultralytics/custom_datasets/
+
 # IDE
 .vscode/
 .idea/
