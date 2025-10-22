@@ -1,6 +1,6 @@
-# 🦷 DENTEX AI Platform - Ultralytics MCP Server
+# 🎯 RCT Detector Platform - Ultralytics MCP Server
 
-> **Advanced AI-powered dental X-ray detection platform with intelligent dataset upload, custom model training, and MCP integration for N8N automation.**
+> **Advanced AI-powered object detection platform with intelligent dataset upload, custom model training, and MCP integration for N8N automation.**
 
 A comprehensive Model Context Protocol (MCP) server that seamlessly integrates Ultralytics YOLO models with N8N workflows, providing a complete AI-powered computer vision solution with 10GB dataset upload support and intelligent background processing.
 
@@ -12,7 +12,7 @@ A comprehensive Model Context Protocol (MCP) server that seamlessly integrates U
 ## ✨ Key Features
 
 ### 🎯 Core Capabilities
-- **🔬 Advanced AI Detection**: YOLO-based dental X-ray analysis
+- **🔬 Advanced AI Detection**: YOLO-based object detection and analysis
 - **📦 Smart Dataset Upload**: 10GB limit with intelligent ZIP structure detection  
 - **🎯 Custom Model Training**: Train your own models with any YOLO dataset
 - **🤖 YOLO11 Model Variants**: Choose from nano/small/medium/large/x-large base models
@@ -192,7 +192,7 @@ Edit `docker-compose.yml` to customize:
 
 ### Training Custom Models with YOLO11 Variants
 1. Go to **Training** page in Streamlit
-2. Upload custom dataset or select DENTEX built-in datasets
+2. Upload custom dataset or select built-in datasets
 3. Choose **YOLO11 Model Variant**:
    - **yolo11n**: Fast training, good for testing (1.9M parameters)
    - **yolo11s**: Balanced performance (9.1M parameters)
@@ -206,7 +206,7 @@ Edit `docker-compose.yml` to customize:
 ### Training Custom Models
 1. Access Training page in Streamlit interface
 2. Select **YOLO11 Model Variant** (nano/small/medium/large/x-large)
-3. Choose your dataset (DENTEX built-in or custom upload)
+3. Choose your dataset (built-in or custom upload)
 4. Configure training parameters (epochs, batch size, image size)
 5. Click **Start Training** and monitor progress
 6. Models auto-save to workspace for later use

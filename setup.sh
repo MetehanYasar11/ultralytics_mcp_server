@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🚀 DENTEX AI Platform - Complete Setup"
+echo "🚀 RCT Detector Platform - Complete Setup"
 echo "====================================="
 echo ""
 

@@ -1,4 +1,4 @@
-# DENTEX MCP Server Container with Zod Support
+# RCT Detector MCP Server Container with Zod Support
 FROM node:18-alpine
 
 # Set working directory
@@ -32,7 +32,7 @@ ENV PORT=3000
 EXPOSE 3000
 
 # Add a simple health check script
-RUN echo '#!/bin/bash\necho "DENTEX MCP Server is healthy"' > /app/health.sh && chmod +x /app/health.sh
+RUN echo '#!/bin/bash\necho "RCT Detector MCP Server is healthy"' > /app/health.sh && chmod +x /app/health.sh
 
 # Default command - Start the MCP server
 CMD ["npm", "start"]

@@ -8,9 +8,8 @@ services:
     volumes:
       - ./ultralytics:/ultralytics
       - ./workspace:/workspace
-      - ./YOLO_MultiLevel_Datasets:/DENTEX/YOLO_MultiLevel_Datasets:ro
-      - custom_datasets:/ultralytics/custom_datasets
       - ./YOLO_MultiLevel_Datasets:/ultralytics/YOLO_MultiLevel_Datasets:ro
+      - custom_datasets:/ultralytics/custom_datasets
       - trained_models:/workspace/trained_models
     environment:
       - NVIDIA_VISIBLE_DEVICES=all

@@ -7,8 +7,8 @@ import pandas as pd
 
 # Page configuration
 st.set_page_config(
-    page_title="DENTEX AI Platform",
-    page_icon="🦷",
+    page_title="RCT Detector Platform",
+    page_icon="🎯",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -114,30 +114,44 @@ def get_system_stats():
             'disk_usage': "N/A"
         }
 
-def get_latest_training_results():
-    """Get latest training results"""
+def get_all_training_history():
+    """Get all training history from runs directory"""
     try:
         runs_dir = Path("/ultralytics/runs/detect")
         if not runs_dir.exists():
-            return None
+            return []
             
-        # Find latest training
-        training_dirs = [d for d in runs_dir.iterdir() if d.is_dir() and (d.name.startswith("dentex_") or d.name.startswith("custom_"))]
+        # Find all training directories
+        training_dirs = [d for d in runs_dir.iterdir() if d.is_dir()]
         if not training_dirs:
-            return None
-            
-        latest_dir = max(training_dirs, key=lambda x: x.stat().st_mtime)
-        results_file = latest_dir / "results.csv"
+            return []
         
-        if results_file.exists():
-            df = pd.read_csv(results_file)
-            return {
-                'training_dir': str(latest_dir.name),
-                'epochs_completed': len(df),
-                'current_metrics': df.iloc[-1].to_dict() if len(df) > 0 else {},
-            }
+        history = []
+        for training_dir in sorted(training_dirs, key=lambda x: x.stat().st_mtime, reverse=True):
+            try:
+                results_file = training_dir / "results.csv"
+                if results_file.exists():
+                    df = pd.read_csv(results_file)
+                    # Get final metrics
+                    final_metrics = df.iloc[-1].to_dict() if len(df) > 0 else {}
+                    
+                    history.append({
+                        'name': training_dir.name,
+                        'epochs': len(df),
+                        'timestamp': training_dir.stat().st_mtime,
+                        'metrics': final_metrics
+                    })
+            except Exception as e:
+                continue
+                
+        return history
     except Exception as e:
-        return None
+        return []
+
+def get_latest_training_results():
+    """Get latest training results"""
+    history = get_all_training_history()
+    return history[0] if history else None
 
 def get_workspace_models():
     """Get list of workspace models"""
@@ -159,8 +173,8 @@ def get_available_pretrained_models():
 st.markdown("""
 <div style="background: linear-gradient(90deg, #0066CC 0%, #004499 100%); color: white; 
             padding: 2rem; border-radius: 15px; margin-bottom: 2rem; text-align: center;">
-    <h1>🦷 DENTEX AI Platform</h1>
-    <p style="font-size: 1.2em;">Professional Dental X-Ray Detection & Training Platform</p>
+    <h1>🎯 RCT Detector Platform</h1>
+    <p style="font-size: 1.2em;">Professional Object Detection & AI Model Training Platform</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -176,7 +190,7 @@ with col1:
     <div style="background: #f0f8ff; border: 1px solid #0066CC; padding: 1rem; 
                 border-radius: 8px; margin-top: 0.5rem;">
         <p style="margin: 0; color: #000;"><strong>Model Training</strong></p>
-        <p style="margin: 0; color: #666; font-size: 0.9em;">Train YOLO models on DENTEX datasets or custom data</p>
+        <p style="margin: 0; color: #666; font-size: 0.9em;">Train YOLO models on built-in datasets or custom data</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -228,10 +242,11 @@ with col3:
     st.metric("🤖 Available Models", str(total_models), delta=f"{model_count} Custom + {pretrained_models} Pre-trained")
 
 with col4:
-    if latest_training:
-        st.metric("📈 Last Training", f"{latest_training['epochs_completed']} epochs", delta="Completed")
+    training_history = get_all_training_history()
+    if training_history:
+        st.metric("📈 Training History", f"{len(training_history)} runs", delta=f"Last: {training_history[0]['epochs']} epochs")
     else:
-        st.metric("📈 Last Training", "None", delta="No history")
+        st.metric("📈 Training History", "None", delta="No history")
 
 st.markdown("---")
 
@@ -313,13 +328,13 @@ with col2:
     # Available datasets
     st.subheader("📊 Available Data")
     
-    # DENTEX datasets
-    dentex_path = Path("/DENTEX/YOLO_MultiLevel_Datasets")
-    if dentex_path.exists():
-        dentex_count = len([d for d in dentex_path.iterdir() if d.is_dir() and d.name.startswith("YOLO_")])
-        st.text(f"🦷 DENTEX Datasets: {dentex_count}")
+    # Built-in datasets
+    builtin_path = Path("/ultralytics/YOLO_MultiLevel_Datasets")
+    if builtin_path.exists():
+        builtin_count = len([d for d in builtin_path.iterdir() if d.is_dir() and d.name.startswith("YOLO_")])
+        st.text(f"📦 Built-in Datasets: {builtin_count}")
     else:
-        st.text("🦷 DENTEX Datasets: 0")
+        st.text("📦 Built-in Datasets: 0")
     
     # Custom datasets
     custom_path = Path("/ultralytics/custom_datasets")
@@ -343,7 +358,7 @@ if st.session_state.refresh_counter % 30 == 0:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666; padding: 1rem;">
-    <p>🦷 DENTEX AI Platform - Professional Dental Detection with Real-Time Monitoring</p>
+    <p>🔬 RCT Detector Platform - Professional Object Detection with Real-Time Monitoring</p>
     <p style="font-size: 0.9em;">Live GPU monitoring • Custom dataset support • Workspace model management</p>
 </div>
 """, unsafe_allow_html=True)

@@ -9,7 +9,7 @@ import shutil
 
 # Page configuration
 st.set_page_config(
-    page_title="DENTEX AI Inference",
+    page_title="RCT Detector Inference",
     page_icon="🔍",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -85,9 +85,35 @@ def get_available_models():
     models.extend(yolo_models)
     return models
 
-def run_inference(model_path, image_path, confidence, iou_threshold, device):
-    """Run YOLO inference on uploaded image"""
+def get_model_classes(model_path):
+    """Get class names from a YOLO model"""
     try:
+        from ultralytics import YOLO
+        model = YOLO(model_path)
+        if hasattr(model, 'names') and model.names:
+            return model.names
+        return {}
+    except Exception as e:
+        return {}
+
+def run_inference(model_path, image_path, confidence, iou_threshold, device, selected_classes=None):
+    """Run YOLO inference on uploaded image with optional class filtering"""
+    try:
+        # Prepare class filter parameter
+        classes_param = ""
+        if selected_classes and len(selected_classes) > 0:
+            # Convert class names to indices
+            from ultralytics import YOLO
+            temp_model = YOLO(model_path)
+            class_indices = []
+            for cls_name in selected_classes:
+                for idx, name in temp_model.names.items():
+                    if name == cls_name:
+                        class_indices.append(idx)
+                        break
+            if class_indices:
+                classes_param = f"classes={class_indices},"
+        
         # Create inference script
         script_content = f"""
 import sys
@@ -103,6 +129,7 @@ results = model.predict(
     conf={confidence},
     iou={iou_threshold},
     device='{device}',
+    {classes_param}
     save=True,
     project='/tmp/inference_results',
     name='latest',
@@ -159,8 +186,8 @@ else:
 st.markdown("""
 <div style="background: linear-gradient(90deg, #28a745 0%, #1e7e34 100%); color: white; 
             padding: 1rem; border-radius: 10px; margin-bottom: 2rem; text-align: center;">
-    <h1>🔍 DENTEX AI Inference</h1>
-    <p>Professional Dental X-Ray Detection & Analysis</p>
+    <h1>🔍 RCT Detector Inference</h1>
+    <p>Professional Object Detection & Analysis</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -205,6 +232,29 @@ with st.sidebar:
     )
     selected_model_path = model_options[selected_model_name]
     
+    # Get and display model classes
+    model_classes = get_model_classes(selected_model_path)
+    selected_classes = []
+    
+    if model_classes:
+        st.markdown("---")
+        st.markdown("### 🎯 Class Filter")
+        st.caption("Select specific classes to detect (leave empty for all)")
+        
+        # Create multi-select with all classes
+        class_names = list(model_classes.values())
+        selected_classes = st.multiselect(
+            "Filter by classes",
+            options=class_names,
+            default=[],
+            help="Select one or more classes to detect. If nothing is selected, all classes will be detected."
+        )
+        
+        if selected_classes:
+            st.success(f"✅ Filtering {len(selected_classes)} class(es)")
+        else:
+            st.info(f"📊 Detecting all {len(class_names)} classes")
+    
     st.markdown("---")
     
     # Inference parameters
@@ -245,7 +295,7 @@ with col1:
         if st.button("🔍 Run Detection", type="primary", use_container_width=True):
             with st.spinner("Running inference..."):
                 success, result_path, output = run_inference(
-                    selected_model_path, temp_image_path, confidence, iou_threshold, device_option
+                    selected_model_path, temp_image_path, confidence, iou_threshold, device_option, selected_classes
                 )
                 
                 if success:
@@ -331,6 +381,6 @@ if st.button("🗑️ Clear Results"):
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666; padding: 1rem;">
-    <p>🔍 DENTEX AI Inference - Professional Detection with Custom Models</p>
+    <p>🔍 RCT Detector Inference - Professional Detection with Custom Models</p>
 </div>
 """, unsafe_allow_html=True)

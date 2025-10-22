@@ -13,8 +13,8 @@ import re
 
 # Page configuration
 st.set_page_config(
-    page_title="DENTEX AI Training Center",
-    page_icon="🦷",
+    page_title="RCT Detector Training",
+    page_icon="🎯",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -72,21 +72,21 @@ def get_nvidia_smi_info():
     except Exception as e:
         return {'name': f'GPU Error: {str(e)}', 'available': False}
 
-def get_dentex_datasets():
-    """Get available DENTEX datasets"""
-    dentex_path = Path("/ultralytics/YOLO_MultiLevel_Datasets")
-    if not dentex_path.exists():
+def get_builtin_datasets():
+    """Get available built-in datasets"""
+    builtin_path = Path("/ultralytics/YOLO_MultiLevel_Datasets")
+    if not builtin_path.exists():
         return []
     
     datasets = []
-    for folder in dentex_path.iterdir():
+    for folder in builtin_path.iterdir():
         if folder.is_dir() and folder.name.startswith("YOLO_"):
             yaml_file = folder / "data.yaml"
             if yaml_file.exists():
                 datasets.append({
                     'name': folder.name,
                     'path': str(yaml_file),
-                    'description': f"DENTEX: {folder.name.replace('YOLO_', '').replace('_', ' ')}"
+                    'description': f"Built-in: {folder.name.replace('YOLO_', '').replace('_', ' ')}"
                 })
     return datasets
 
@@ -238,12 +238,12 @@ def get_latest_training_results():
         if not runs_dir.exists():
             return None
             
-        # Find latest dentex training
-        dentex_dirs = [d for d in runs_dir.iterdir() if d.is_dir() and (d.name.startswith("dentex_") or d.name.startswith("custom_"))]
-        if not dentex_dirs:
+        # Find latest training (all directories)
+        training_dirs = [d for d in runs_dir.iterdir() if d.is_dir() and (d.name.startswith("training_") or d.name.startswith("custom_"))]
+        if not training_dirs:
             return None
             
-        latest_dir = max(dentex_dirs, key=lambda x: x.stat().st_mtime)
+        latest_dir = max(training_dirs, key=lambda x: x.stat().st_mtime)
         results_file = latest_dir / "results.csv"
         
         if results_file.exists():
@@ -286,8 +286,8 @@ def save_model_to_workspace(training_path, model_name):
 st.markdown("""
 <div style="background: linear-gradient(90deg, #0066CC 0%, #004499 100%); color: white; 
             padding: 1rem; border-radius: 10px; margin-bottom: 2rem; text-align: center;">
-    <h1>🦷 DENTEX AI Training Center</h1>
-    <p>Professional Dental X-Ray Detection Model Training with Custom Dataset Support</p>
+    <h1>🎯 RCT Detector Training Center</h1>
+    <p>Professional Object Detection Model Training with Custom Dataset Support</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -414,12 +414,12 @@ with st.sidebar:
                             st.error("• Checking file format (ZIP with YOLO structure)")
     
     # Get all available datasets
-    dentex_datasets = get_dentex_datasets()
+    builtin_datasets = get_builtin_datasets()
     custom_datasets = get_custom_datasets()
-    all_datasets = dentex_datasets + custom_datasets
+    all_datasets = builtin_datasets + custom_datasets
     
     if not all_datasets:
-        st.error("No datasets found! Upload a custom dataset or check DENTEX datasets.")
+        st.error("No datasets found! Upload a custom dataset or check built-in datasets.")
         st.stop()
     
     dataset_options = {ds['description']: ds['path'] for ds in all_datasets}
@@ -630,7 +630,7 @@ with col1:
             with st.spinner("Starting YOLO training..."):
                 try:
                     # Create training script
-                    training_prefix = "custom" if "Custom:" in selected_dataset_name else "dentex"
+                    training_prefix = "custom" if "Custom:" in selected_dataset_name else "training"
                     script_content = f"""
 import os
 from ultralytics import YOLO
@@ -798,15 +798,15 @@ with col2:
     st.subheader("📁 Dataset Information")
     
     # Show dataset info
-    col_dentex, col_custom = st.columns(2)
+    col_builtin, col_custom = st.columns(2)
     
-    with col_dentex:
-        st.write("**DENTEX Datasets:**")
-        if dentex_datasets:
-            for dataset in dentex_datasets:
+    with col_builtin:
+        st.write("**Built-in Datasets:**")
+        if builtin_datasets:
+            for dataset in builtin_datasets:
                 st.text(f"• {dataset['description']}")
         else:
-            st.text("No DENTEX datasets")
+            st.text("No built-in datasets")
     
     with col_custom:
         st.write("**Custom Datasets:**")
@@ -820,6 +820,6 @@ with col2:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666; padding: 1rem;">
-    <p>🦷 DENTEX AI Training Center - Professional Training with Custom Dataset Support & Live GPU Monitoring</p>
+    <p>🎯 RCT Detector Training Center - Professional Training with Custom Dataset Support & Live GPU Monitoring</p>
 </div>
 """, unsafe_allow_html=True)

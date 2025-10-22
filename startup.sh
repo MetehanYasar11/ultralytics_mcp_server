@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Starting DENTEX AI Platform..."
+echo "🚀 Starting RCT Detector Platform..."
 
 # Create necessary directories
 mkdir -p /ultralytics/runs
@@ -13,12 +13,12 @@ mkdir -p /workspace/trained_models
 chmod 755 /ultralytics/upload_processor.py
 chmod 755 /usr/local/bin/monitor.sh
 
-# Check if DENTEX datasets are mounted
-if [ -d "/DENTEX/YOLO_MultiLevel_Datasets" ]; then
-    echo "✅ DENTEX datasets found at /DENTEX/YOLO_MultiLevel_Datasets"
-    ls -la /DENTEX/YOLO_MultiLevel_Datasets/ | head -5
+# Check if built-in datasets are mounted
+if [ -d "/ultralytics/YOLO_MultiLevel_Datasets" ]; then
+    echo "✅ Built-in datasets found at /ultralytics/YOLO_MultiLevel_Datasets"
+    ls -la /ultralytics/YOLO_MultiLevel_Datasets/ | head -5
 else
-    echo "⚠️ DENTEX datasets not found at /DENTEX/YOLO_MultiLevel_Datasets"
+    echo "⚠️ Built-in datasets not found at /ultralytics/YOLO_MultiLevel_Datasets"
 fi
 
 # Check workspace
