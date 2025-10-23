@@ -664,7 +664,10 @@ results = model.train(
     name=training_name,
     exist_ok=True,
     verbose=True,
-    save=True
+    save=True,
+    plots=True,
+    # Enable TensorBoard logging
+    tensorboard=True
 )
 
 print("Training completed successfully!")
