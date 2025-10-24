@@ -699,12 +699,13 @@ except Exception as e:
                     with open('/tmp/train_script.py', 'w') as f:
                         f.write(script_content)
                     
-                    # Start training in background
+                    # Start training in background with logging
+                    log_file = open('/tmp/training_log.txt', 'w')
                     subprocess.Popen(
                         ["python", "/tmp/train_script.py"],
                         cwd="/ultralytics",
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL
+                        stdout=log_file,
+                        stderr=log_file
                     )
                     
                     st.success("✅ Training started! Refreshing to show progress...")
@@ -770,6 +771,22 @@ with col2:
         st.session_state.system_refresh += 1
     
     st.subheader("📊 Training History")
+    
+    # Show training log if exists
+    log_path = Path("/tmp/training_log.txt")
+    if log_path.exists():
+        with st.expander("📝 Training Log (Last Run)", expanded=False):
+            try:
+                log_content = log_path.read_text()
+                # Show last 50 lines
+                log_lines = log_content.splitlines()
+                if len(log_lines) > 50:
+                    st.text("... (showing last 50 lines)")
+                    st.text("\n".join(log_lines[-50:]))
+                else:
+                    st.text(log_content)
+            except Exception as e:
+                st.error(f"Error reading log: {e}")
     
     # Show recent training results
     results = get_latest_training_results()
