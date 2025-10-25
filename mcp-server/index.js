@@ -1439,7 +1439,7 @@ ${valScript}
 EOFPYTHON`);
 
           const valResult = await execInContainer(
-            `cd /ultralytics && python /tmp/val_class_metrics.py 2>/dev/null`
+            `cd /ultralytics && timeout 300 python /tmp/val_class_metrics.py 2>&1 | tail -1`
           );
 
           if (valResult.success && valResult.stdout.trim()) {
@@ -1447,7 +1447,11 @@ EOFPYTHON`);
               const valData = JSON.parse(valResult.stdout.trim());
               classSpecificMetrics = valData;
             } catch (e) {
-              // Failed to parse, will return overall metrics only
+              // Failed to parse, include error info
+              classSpecificMetrics = {
+                error: "Failed to parse validation results",
+                raw_output: valResult.stdout.substring(0, 500)
+              };
             }
           }
         }
