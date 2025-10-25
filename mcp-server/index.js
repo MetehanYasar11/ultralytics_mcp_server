@@ -48,7 +48,75 @@ async function listDirsInContainer(dirPath) {
   return result.stdout
     .trim()
     .split("\n")
-    .filter((line) => line.length > 0);
+    .filter((d) => d.length > 0);
+}
+
+// Helper: Generate all hyperparameter combinations
+function generateCombinations(modelVariants, hyperparameters, datasetName) {
+  const combinations = [];
+  const {
+    learning_rates = [0.01],
+    batch_sizes = [16],
+    epochs_list = [100],
+    optimizers = ["auto"],
+    img_sizes = [640],
+  } = hyperparameters;
+
+  for (const model of modelVariants) {
+    for (const lr of learning_rates) {
+      for (const batch of batch_sizes) {
+        for (const epochs of epochs_list) {
+          for (const optimizer of optimizers) {
+            for (const imgSize of img_sizes) {
+              combinations.push({
+                model_variant: model,
+                dataset_name: datasetName,
+                learning_rate: lr,
+                batch_size: batch,
+                epochs: epochs,
+                optimizer: optimizer,
+                img_size: imgSize,
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+  return combinations;
+}
+
+// Helper: Read grid search queue
+async function readGridSearchQueue(searchId) {
+  try {
+    const queueFile = `/tmp/grid_search_${searchId}.json`;
+    const content = await readFileFromContainer(queueFile);
+    if (!content) return null;
+    return JSON.parse(content);
+  } catch (error) {
+    return null;
+  }
+}
+
+// Helper: Save grid search queue
+async function saveGridSearchQueue(searchId, queueData) {
+  const queueFile = `/tmp/grid_search_${searchId}.json`;
+  const jsonStr = JSON.stringify(queueData, null, 2).replace(/"/g, '\\"');
+  await execInContainer(`echo "${jsonStr}" > ${queueFile}`);
+}
+
+// Helper: Estimate training time
+function estimateTrainingTime(combination) {
+  // Rough estimates in hours based on model size and epochs
+  const modelTimes = {
+    yolo11n: 0.5,
+    yolo11s: 1.0,
+    yolo11m: 2.0,
+    yolo11l: 3.5,
+    yolo11x: 5.0,
+  };
+  const baseTime = modelTimes[combination.model_variant] || 2.0;
+  return (baseTime * combination.epochs) / 100; // Normalize to per 100 epochs
 }
 
 // Helper: List files in container
@@ -225,6 +293,101 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: "object",
           properties: {},
+        },
+      },
+      {
+        name: "start_grid_search",
+        description:
+          "Start an automated grid search to find optimal hyperparameters. Tests all combinations of specified parameters and returns best performing model.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            model_variants: {
+              type: "array",
+              items: {
+                type: "string",
+                enum: ["yolo11n", "yolo11s", "yolo11m", "yolo11l", "yolo11x"],
+              },
+              description: "YOLO model variants to test",
+              default: ["yolo11n", "yolo11s"],
+            },
+            dataset_name: {
+              type: "string",
+              description: "Dataset to use for all experiments",
+            },
+            hyperparameters: {
+              type: "object",
+              properties: {
+                learning_rates: {
+                  type: "array",
+                  items: { type: "number" },
+                  description: "Learning rates to test",
+                  default: [0.001, 0.01],
+                },
+                batch_sizes: {
+                  type: "array",
+                  items: { type: "number" },
+                  description: "Batch sizes to test",
+                  default: [8, 16],
+                },
+                epochs_list: {
+                  type: "array",
+                  items: { type: "number" },
+                  description: "Epoch counts to test",
+                  default: [50],
+                },
+                optimizers: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "Optimizers to test",
+                  default: ["auto"],
+                },
+                img_sizes: {
+                  type: "array",
+                  items: { type: "number" },
+                  description: "Image sizes to test",
+                  default: [640],
+                },
+              },
+            },
+            max_parallel_jobs: {
+              type: "number",
+              description: "Maximum number of parallel training jobs (limited by GPU)",
+              default: 1,
+              minimum: 1,
+              maximum: 4,
+            },
+          },
+          required: ["model_variants", "dataset_name"],
+        },
+      },
+      {
+        name: "get_grid_search_status",
+        description:
+          "Get status and results of an ongoing or completed grid search",
+        inputSchema: {
+          type: "object",
+          properties: {
+            search_id: {
+              type: "string",
+              description: "Grid search ID returned by start_grid_search",
+            },
+          },
+          required: ["search_id"],
+        },
+      },
+      {
+        name: "stop_grid_search",
+        description: "Stop a running grid search and return best results so far",
+        inputSchema: {
+          type: "object",
+          properties: {
+            search_id: {
+              type: "string",
+              description: "Grid search ID to stop",
+            },
+          },
+          required: ["search_id"],
         },
       },
     ],
@@ -713,6 +876,324 @@ except Exception as e:
                   memory_total_mb: parseInt(mem_total),
                   power_draw_w: parseFloat(power_draw),
                   power_limit_w: parseFloat(power_limit),
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      case "start_grid_search": {
+        const {
+          model_variants = ["yolo11n", "yolo11s"],
+          dataset_name,
+          hyperparameters = {},
+          max_parallel_jobs = 1,
+        } = args;
+
+        // Generate all combinations
+        const combinations = generateCombinations(
+          model_variants,
+          hyperparameters,
+          dataset_name
+        );
+
+        // Create search ID
+        const searchId = `gs_${Date.now()}`;
+
+        // Calculate total estimated time
+        const totalTimeHours = combinations.reduce(
+          (sum, combo) => sum + estimateTrainingTime(combo),
+          0
+        );
+
+        // Initialize queue
+        const queue = {
+          id: searchId,
+          status: "running",
+          total_combinations: combinations.length,
+          completed: 0,
+          running: [],
+          pending: combinations,
+          results: [],
+          best_model: null,
+          started_at: new Date().toISOString(),
+          max_parallel: max_parallel_jobs,
+        };
+
+        // Save queue
+        await saveGridSearchQueue(searchId, queue);
+
+        // Create and start worker script
+        const workerScript = `#!/usr/bin/env python3
+import json
+import time
+import subprocess
+import sys
+from pathlib import Path
+
+QUEUE_FILE = "/tmp/grid_search_${searchId}.json"
+MAX_PARALLEL = ${max_parallel_jobs}
+
+def load_queue():
+    try:
+        with open(QUEUE_FILE) as f:
+            return json.load(f)
+    except:
+        return None
+
+def save_queue(data):
+    with open(QUEUE_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
+
+def get_training_status():
+    try:
+        result = subprocess.run([
+            "bash", "-c",
+            "ps aux | grep -E '(train_script|ultralytics)' | grep -v grep"
+        ], capture_output=True, text=True)
+        return len(result.stdout.strip()) > 0
+    except:
+        return False
+
+def start_training(combo):
+    from datetime import datetime
+    from ultralytics import YOLO
+    
+    print(f"\\n🚀 Starting experiment: {combo['model_variant']} lr={combo['learning_rate']} batch={combo['batch_size']}")
+    
+    # Determine dataset path
+    if combo['dataset_name'].startswith('YOLO_'):
+        dataset_path = f"/ultralytics/YOLO_MultiLevel_Datasets/{combo['dataset_name']}/data.yaml"
+    else:
+        dataset_path = f"/ultralytics/custom_datasets/{combo['dataset_name']}/data.yaml"
+    
+    model = YOLO(f"{combo['model_variant']}.pt")
+    
+    time_str = datetime.now().strftime('%H%M%S')
+    training_name = f'grid_search_{time_str}'
+    
+    try:
+        results = model.train(
+            data=dataset_path,
+            epochs=combo['epochs'],
+            imgsz=combo['img_size'],
+            batch=combo['batch_size'],
+            device='0',
+            lr0=combo['learning_rate'],
+            optimizer=combo['optimizer'],
+            project='/ultralytics/runs/detect',
+            name=training_name,
+            exist_ok=True,
+            verbose=True
+        )
+        
+        # Get metrics from results
+        metrics = results.results_dict
+        return {
+            'training_name': training_name,
+            'success': True,
+            'mAP50': float(metrics.get('metrics/mAP50(B)', 0)),
+            'mAP50_95': float(metrics.get('metrics/mAP50-95(B)', 0)),
+            'precision': float(metrics.get('metrics/precision(B)', 0)),
+            'recall': float(metrics.get('metrics/recall(B)', 0)),
+        }
+    except Exception as e:
+        print(f"❌ Training failed: {str(e)}")
+        return {
+            'training_name': training_name,
+            'success': False,
+            'error': str(e),
+            'mAP50': 0,
+            'mAP50_95': 0,
+            'precision': 0,
+            'recall': 0,
+        }
+
+print("🔍 Grid Search Worker Started")
+print(f"Search ID: ${searchId}")
+
+while True:
+    queue = load_queue()
+    if not queue or queue['status'] == 'stopped':
+        print("⏹️  Grid search stopped")
+        break
+    
+    # Check if we can start new training
+    if len(queue['pending']) > 0 and not get_training_status():
+        # Start next experiment
+        combo = queue['pending'].pop(0)
+        
+        print(f"\\n📊 Progress: {queue['completed']}/{queue['total_combinations']}")
+        print(f"⏳ Remaining: {len(queue['pending'])}")
+        
+        # Run training
+        result = start_training(combo)
+        
+        # Add to results
+        result_entry = {**combo, **result}
+        queue['results'].append(result_entry)
+        queue['completed'] += 1
+        
+        # Update best model
+        if result['success']:
+            if not queue['best_model'] or result['mAP50'] > queue['best_model']['mAP50']:
+                queue['best_model'] = result_entry
+                print(f"\\n🏆 New best model! mAP50: {result['mAP50']:.4f}")
+        
+        save_queue(queue)
+    
+    # Check if done
+    if len(queue['pending']) == 0:
+        queue['status'] = 'completed'
+        save_queue(queue)
+        print(f"\\n✅ Grid search completed!")
+        print(f"Best model: {queue['best_model']['model_variant']} with mAP50: {queue['best_model']['mAP50']:.4f}")
+        break
+    
+    time.sleep(10)  # Check every 10 seconds
+`;
+
+        const scriptPath = `/tmp/grid_search_worker_${searchId}.py`;
+        await execInContainer(`cat > ${scriptPath} << 'EOF'
+${workerScript}
+EOF`);
+        await execInContainer(`chmod +x ${scriptPath}`);
+
+        // Start worker in background
+        execInContainer(`nohup python3 ${scriptPath} > /tmp/grid_search_${searchId}.log 2>&1 &`);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  search_id: searchId,
+                  total_experiments: combinations.length,
+                  estimated_time_hours: totalTimeHours.toFixed(1),
+                  combinations: combinations.slice(0, 5), // Show first 5
+                  status: "Grid search started. Use get_grid_search_status to monitor.",
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      case "get_grid_search_status": {
+        const { search_id } = args;
+
+        const queue = await readGridSearchQueue(search_id);
+        if (!queue) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ error: "Grid search not found" }),
+              },
+            ],
+          };
+        }
+
+        // Sort results by mAP50
+        const topN = queue.results
+          .filter((r) => r.success)
+          .sort((a, b) => b.mAP50 - a.mAP50)
+          .slice(0, 5);
+
+        const progressPercent =
+          queue.total_combinations > 0
+            ? ((queue.completed / queue.total_combinations) * 100).toFixed(1)
+            : 0;
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  search_id: queue.id,
+                  status: queue.status,
+                  progress: `${queue.completed}/${queue.total_combinations}`,
+                  progress_percent: progressPercent,
+                  pending_experiments: queue.pending.length,
+                  completed_experiments: queue.completed,
+                  top_5_models: topN.map((r, idx) => ({
+                    rank: idx + 1,
+                    model: r.model_variant,
+                    learning_rate: r.learning_rate,
+                    batch_size: r.batch_size,
+                    epochs: r.epochs,
+                    mAP50: r.mAP50,
+                    mAP50_95: r.mAP50_95,
+                    precision: r.precision,
+                    recall: r.recall,
+                    training_name: r.training_name,
+                  })),
+                  best_model: queue.best_model
+                    ? {
+                        model: queue.best_model.model_variant,
+                        learning_rate: queue.best_model.learning_rate,
+                        batch_size: queue.best_model.batch_size,
+                        epochs: queue.best_model.epochs,
+                        mAP50: queue.best_model.mAP50,
+                        training_name: queue.best_model.training_name,
+                      }
+                    : null,
+                  started_at: queue.started_at,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      case "stop_grid_search": {
+        const { search_id } = args;
+
+        const queue = await readGridSearchQueue(search_id);
+        if (!queue) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ error: "Grid search not found" }),
+              },
+            ],
+          };
+        }
+
+        // Update status to stopped
+        queue.status = "stopped";
+        await saveGridSearchQueue(search_id, queue);
+
+        // Kill worker process
+        await execInContainer(`pkill -f grid_search_worker_${search_id}.py`);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  message: "Grid search stopped",
+                  completed_experiments: queue.completed,
+                  total_experiments: queue.total_combinations,
+                  best_result: queue.best_model
+                    ? {
+                        model: queue.best_model.model_variant,
+                        mAP50: queue.best_model.mAP50,
+                        learning_rate: queue.best_model.learning_rate,
+                        batch_size: queue.best_model.batch_size,
+                      }
+                    : null,
                 },
                 null,
                 2
