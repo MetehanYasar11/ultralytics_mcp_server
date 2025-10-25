@@ -1227,7 +1227,13 @@ EOF`);
 
         const trainingPath = `/ultralytics/runs/detect/${training_name}`;
 
-        // Read args.yaml to get dataset path
+        // Check if there's an active training running
+        const statusCheckResult = await execInContainer(
+          `ps aux | grep "train_script.py" | grep -v grep | wc -l`
+        );
+        const isTrainingActive = parseInt(statusCheckResult.stdout.trim()) > 0;
+
+        // Read args.yaml to get dataset path and model info
         const argsYAML = await readFileFromContainer(`${trainingPath}/args.yaml`);
         if (!argsYAML) {
           return {
@@ -1240,8 +1246,10 @@ EOF`);
           };
         }
 
-        // Extract dataset path
+        // Extract dataset path and model path
         const dataMatch = argsYAML.match(/data:\s*(.+)/);
+        const modelMatch = argsYAML.match(/model:\s*(.+)/);
+        
         if (!dataMatch) {
           return {
             content: [
@@ -1254,6 +1262,12 @@ EOF`);
         }
 
         const datasetPath = dataMatch[1].trim();
+        const modelName = modelMatch ? modelMatch[1].trim() : null;
+        
+        // Get the trained model weights
+        const weightsPath = `${trainingPath}/weights/best.pt`;
+        const weightsExist = await execInContainer(`test -f "${weightsPath}" && echo "yes" || echo "no"`);
+        const hasWeights = weightsExist.stdout.trim() === "yes";
 
         // Read dataset yaml to get class names
         const datasetYAML = await readFileFromContainer(datasetPath);
@@ -1369,6 +1383,75 @@ EOF`);
           }
         }
 
+        // If no active training and we have weights, run validation for specific class metrics
+        let classSpecificMetrics = null;
+        if (!isTrainingActive && hasWeights && class_name) {
+          // Create a Python script to run validation and extract class metrics
+          const valScript = `
+import sys
+sys.path.append('/ultralytics')
+from ultralytics import YOLO
+import json
+
+model = YOLO("${weightsPath}")
+results = model.val(data="${datasetPath}", split="val", verbose=False)
+
+# Get class names
+class_names = results.names
+
+# Find matching classes
+search_term = "${class_name}".lower()
+matching_classes = []
+for idx, name in class_names.items():
+    if search_term in name.lower():
+        matching_classes.append({
+            "index": idx,
+            "name": name
+        })
+
+# Get per-class metrics
+class_metrics = []
+if hasattr(results, 'box') and hasattr(results.box, 'ap_class_index'):
+    ap_per_class = results.box.ap  # AP values per class
+    ap50_per_class = results.box.ap50  # AP50 values per class
+    
+    for match in matching_classes:
+        idx = match["index"]
+        if idx < len(ap50_per_class):
+            class_metrics.append({
+                "class_index": idx,
+                "class_name": match["name"],
+                "mAP50": float(ap50_per_class[idx]) if ap50_per_class[idx] is not None else 0.0,
+                "mAP50_95": float(ap_per_class[idx]) if ap_per_class[idx] is not None else 0.0
+            })
+
+output = {
+    "matching_classes": matching_classes,
+    "class_metrics": class_metrics
+}
+
+print(json.dumps(output))
+`;
+
+          // Write and execute the script
+          await execInContainer(`cat > /tmp/val_class_metrics.py << 'EOFPYTHON'
+${valScript}
+EOFPYTHON`);
+
+          const valResult = await execInContainer(
+            `cd /ultralytics && python /tmp/val_class_metrics.py 2>/dev/null`
+          );
+
+          if (valResult.success && valResult.stdout.trim()) {
+            try {
+              const valData = JSON.parse(valResult.stdout.trim());
+              classSpecificMetrics = valData;
+            } catch (e) {
+              // Failed to parse, will return overall metrics only
+            }
+          }
+        }
+
         return {
           content: [
             {
@@ -1380,7 +1463,14 @@ EOF`);
                   total_classes: Object.keys(classes).length,
                   searched_classes: targetClasses,
                   overall_metrics: overallMetrics,
-                  note: "YOLO stores per-class metrics in validation logs and confusion matrix. Overall metrics shown above. For detailed per-class analysis, check confusion_matrix.png in the training directory.",
+                  class_specific_metrics: classSpecificMetrics,
+                  note: classSpecificMetrics 
+                    ? "Class-specific metrics obtained via validation run"
+                    : isTrainingActive 
+                      ? "Training is active - skipping validation to avoid interference. Overall metrics shown."
+                      : !hasWeights
+                        ? "No trained weights found. Overall metrics shown."
+                        : "YOLO stores per-class metrics in validation logs and confusion matrix. Overall metrics shown above.",
                   confusion_matrix_path: `${trainingPath}/confusion_matrix.png`,
                   all_classes: classes,
                 },
