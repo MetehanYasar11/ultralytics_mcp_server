@@ -736,6 +736,245 @@ N8N (Automation) ↔ MCP Tools ↔ Streamlit (Visual Interface)`;
     }
   );
 
+  // Tool 8: Get Class-Specific Metrics
+  server.tool(
+    'get_class_metrics',
+    'Get per-class performance metrics for a specific training run. Can automatically run validation if needed.',
+    {
+      training_name: z.string().describe('Training directory name (e.g., "training_042643" or just "042643")'),
+      class_name: z.string().optional().describe('Optional: specific class name to search for (e.g., "Root Canal Treatment", "Caries"). Case-insensitive partial matching supported.')
+    },
+    async ({ training_name, class_name }) => {
+      try {
+        console.log(`📊 Getting class metrics for training: ${training_name}${class_name ? `, class: ${class_name}` : ''}`);
+        
+        const getClassMetricsCommand = `
+import subprocess
+import json
+import re
+from pathlib import Path
+
+training_name = "${training_name}"
+class_name = "${class_name || ''}"
+
+# Normalize training name
+if not training_name.startswith("training_"):
+    training_name = f"training_{training_name}"
+
+# Find training directory
+training_dir = Path(f"/ultralytics/runs/detect/{training_name}")
+if not training_dir.exists():
+    print(json.dumps({"error": f"Training directory not found: {training_dir}"}))
+    exit(1)
+
+# Check for existing results.csv
+results_csv = training_dir / "results.csv"
+has_existing_results = results_csv.exists()
+
+# Get model and dataset paths
+weights_path = training_dir / "weights" / "best.pt"
+args_yaml = training_dir / "args.yaml"
+
+has_weights = weights_path.exists()
+has_args = args_yaml.exists()
+
+result = {
+    "training_directory": str(training_dir),
+    "has_existing_results": has_existing_results,
+    "has_weights": has_weights,
+    "has_args": has_args
+}
+
+# Parse overall metrics from existing results.csv
+if has_existing_results:
+    try:
+        import pandas as pd
+        df = pd.read_csv(results_csv)
+        df.columns = df.columns.str.strip()
+        
+        last_row = df.iloc[-1]
+        
+        result["overall_metrics"] = {
+            "epoch": int(last_row.get("epoch", last_row.get("         epoch", -1))),
+            "box_loss": float(last_row.get("train/box_loss", last_row.get("      train/box_loss", 0))),
+            "cls_loss": float(last_row.get("train/cls_loss", last_row.get("      train/cls_loss", 0))),
+            "dfl_loss": float(last_row.get("train/dfl_loss", last_row.get("      train/dfl_loss", 0))),
+            "precision": float(last_row.get("metrics/precision(B)", last_row.get("   metrics/precision(B)", 0))),
+            "recall": float(last_row.get("metrics/recall(B)", last_row.get("      metrics/recall(B)", 0))),
+            "mAP50": float(last_row.get("metrics/mAP50(B)", last_row.get("      metrics/mAP50(B)", 0))),
+            "mAP50_95": float(last_row.get("metrics/mAP50-95(B)", last_row.get("   metrics/mAP50-95(B)", 0)))
+        }
+    except Exception as e:
+        result["overall_metrics_error"] = str(e)
+
+# Extract dataset path from args.yaml
+dataset_path = None
+if has_args:
+    try:
+        import yaml
+        with open(args_yaml, 'r') as f:
+            args = yaml.safe_load(f)
+            dataset_path = args.get("data")
+    except Exception as e:
+        result["args_parse_error"] = str(e)
+
+# Check if training is active
+try:
+    train_check = subprocess.run(
+        ["pgrep", "-f", "train_script.py"],
+        capture_output=True,
+        text=True,
+        timeout=5
+    )
+    is_training_active = train_check.returncode == 0
+except:
+    is_training_active = False
+
+result["is_training_active"] = is_training_active
+
+# Run validation if we have weights, dataset, not training, and class name specified
+class_specific_metrics = None
+if not is_training_active and has_weights and dataset_path and class_name:
+    try:
+        print("Running validation to get class-specific metrics...", flush=True)
+        
+        # Run YOLO validation
+        val_cmd = [
+            "yolo", "val",
+            f"model={weights_path}",
+            f"data={dataset_path}",
+            "device=0",
+            "batch=8"
+        ]
+        
+        val_result = subprocess.run(
+            val_cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            cwd="/ultralytics"
+        )
+        
+        val_output = val_result.stdout + val_result.stderr
+        
+        # Parse class-specific metrics from validation output
+        class_metrics = []
+        search_term = class_name.lower()
+        
+        for line in val_output.split('\\n'):
+            # Skip header and "all" summary row
+            if 'Class' in line and 'Images' in line:
+                continue
+            if line.strip().startswith('all '):
+                continue
+            
+            # Match class metrics line: "ClassName  images  instances  P  R  mAP50  mAP50-95"
+            match = re.match(r'^\\s*([A-Za-z][A-Za-z0-9 _\\-]+?)\\s+(\\d+)\\s+(\\d+)\\s+([\\d.]+)\\s+([\\d.]+)\\s+([\\d.]+)\\s+([\\d.]+)', line)
+            
+            if match and search_term in match.group(1).lower():
+                class_metrics.append({
+                    "class_name": match.group(1).strip(),
+                    "images": int(match.group(2)),
+                    "instances": int(match.group(3)),
+                    "precision": float(match.group(4)),
+                    "recall": float(match.group(5)),
+                    "mAP50": float(match.group(6)),
+                    "mAP50_95": float(match.group(7))
+                })
+        
+        # Get validation directory from output
+        val_dir_match = re.search(r'Results saved to ([^\\s]+)', val_output)
+        validation_dir = val_dir_match.group(1) if val_dir_match else None
+        
+        class_specific_metrics = {
+            "validation_dir": validation_dir,
+            "class_metrics": class_metrics if class_metrics else None,
+            "note": f"Found {len(class_metrics)} matching class(es)" if class_metrics else "No matching classes found"
+        }
+        
+    except subprocess.TimeoutExpired:
+        class_specific_metrics = {"error": "Validation timed out after 5 minutes"}
+    except Exception as e:
+        class_specific_metrics = {"error": f"Validation failed: {str(e)}"}
+
+if class_specific_metrics:
+    result["class_specific_metrics"] = class_specific_metrics
+
+print(json.dumps(result, indent=2))
+`;
+        
+        const result = await executeInUltralyticsContainer(getClassMetricsCommand);
+        const metricsData = JSON.parse(result);
+        
+        let formattedResult = `📊 **CLASS METRICS FOR ${training_name.toUpperCase()}**\\n`;
+        formattedResult += `==============================================\\n\\n`;
+        
+        if (metricsData.error) {
+          formattedResult += `❌ Error: ${metricsData.error}\\n`;
+        } else {
+          formattedResult += `📁 Training Directory: ${metricsData.training_directory}\\n`;
+          formattedResult += `⚙️ Training Active: ${metricsData.is_training_active ? '🟢 Yes' : '🔴 No'}\\n\\n`;
+          
+          if (metricsData.overall_metrics) {
+            formattedResult += `📈 **OVERALL METRICS:**\\n`;
+            formattedResult += `  • Epoch: ${metricsData.overall_metrics.epoch}\\n`;
+            formattedResult += `  • Precision: ${(metricsData.overall_metrics.precision * 100).toFixed(2)}%\\n`;
+            formattedResult += `  • Recall: ${(metricsData.overall_metrics.recall * 100).toFixed(2)}%\\n`;
+            formattedResult += `  • mAP50: ${(metricsData.overall_metrics.mAP50 * 100).toFixed(2)}%\\n`;
+            formattedResult += `  • mAP50-95: ${(metricsData.overall_metrics.mAP50_95 * 100).toFixed(2)}%\\n\\n`;
+          }
+          
+          if (metricsData.class_specific_metrics) {
+            const csm = metricsData.class_specific_metrics;
+            
+            if (csm.error) {
+              formattedResult += `⚠️ Class-specific metrics: ${csm.error}\\n`;
+            } else if (csm.class_metrics && csm.class_metrics.length > 0) {
+              formattedResult += `🎯 **CLASS-SPECIFIC METRICS (${class_name}):**\\n\\n`;
+              
+              csm.class_metrics.forEach(cm => {
+                formattedResult += `  📌 **${cm.class_name}**\\n`;
+                formattedResult += `     • Images: ${cm.images}\\n`;
+                formattedResult += `     • Instances: ${cm.instances}\\n`;
+                formattedResult += `     • Precision: ${(cm.precision * 100).toFixed(2)}%\\n`;
+                formattedResult += `     • Recall: ${(cm.recall * 100).toFixed(2)}%\\n`;
+                formattedResult += `     • mAP50: ${(cm.mAP50 * 100).toFixed(2)}%\\n`;
+                formattedResult += `     • mAP50-95: ${(cm.mAP50_95 * 100).toFixed(2)}%\\n\\n`;
+              });
+              
+              if (csm.validation_dir) {
+                formattedResult += `📂 Validation Results: ${csm.validation_dir}\\n`;
+              }
+            } else {
+              formattedResult += `ℹ️ ${csm.note}\\n`;
+            }
+          } else if (class_name && !metricsData.is_training_active) {
+            formattedResult += `ℹ️ No class-specific metrics available. Need weights and dataset to run validation.\\n`;
+          }
+        }
+        
+        return {
+          content: [
+            {
+              type: 'text',
+              text: formattedResult
+            }
+          ]
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `❌ Failed to get class metrics: ${error.message}`
+            }
+          ],
+          isError: true
+        };
+      }
+    }
+  );
+
   return server;
 };
 
