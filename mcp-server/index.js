@@ -1269,23 +1269,40 @@ EOF`);
         }
 
         // Parse class names
-        const classLines = datasetYAML.match(/names:\s*\n([\s\S]+?)(?=\n\w+:|$)/);
+        const classLines = datasetYAML.match(/names:\s*\n([\s\S]+?)(?=\ntest:|train:|val:|nc:|path:|$)/);
         if (!classLines) {
           return {
             content: [
               {
                 type: "text",
-                text: JSON.stringify({ error: "Could not parse class names from dataset YAML" }),
+                text: JSON.stringify({ 
+                  error: "Could not parse class names from dataset YAML",
+                  yaml_preview: datasetYAML.substring(0, 500)
+                }),
               },
             ],
           };
         }
 
         const classes = {};
-        const classMatches = classLines[1].matchAll(/(\d+):\s*(.+)/g);
-        for (const match of classMatches) {
-          const [_, index, name] = match;
-          classes[parseInt(index)] = name.trim();
+        // Support both formats: "0: ClassName" and "  - ClassName"
+        const yamlContent = classLines[1];
+        
+        // Try format: "  0: ClassName"
+        let classMatches = [...yamlContent.matchAll(/^\s*(\d+):\s*['"]?([^'"#\n]+)['"]?\s*$/gm)];
+        
+        if (classMatches.length === 0) {
+          // Try list format: "  - ClassName"
+          classMatches = [...yamlContent.matchAll(/^\s*-\s*['"]?([^'"#\n]+)['"]?\s*$/gm)];
+          classMatches.forEach((match, index) => {
+            classes[index] = match[1].trim();
+          });
+        } else {
+          // Use numbered format
+          classMatches.forEach((match) => {
+            const [_, index, name] = match;
+            classes[parseInt(index)] = name.trim();
+          });
         }
 
         // If class_name provided, search for it
@@ -1332,13 +1349,22 @@ EOF`);
         if (resultsCSV) {
           const lines = resultsCSV.trim().split("\n");
           if (lines.length > 1) {
+            const header = lines[0].split(",").map((v) => v.trim());
             const lastLine = lines[lines.length - 1];
             const values = lastLine.split(",").map((v) => v.trim());
+            
+            // Find correct column indices
+            const precisionIdx = header.findIndex(h => h.includes("precision(B)"));
+            const recallIdx = header.findIndex(h => h.includes("recall(B)"));
+            const mAP50Idx = header.findIndex(h => h.includes("mAP50(B)") && !h.includes("mAP50-95"));
+            const mAP5095Idx = header.findIndex(h => h.includes("mAP50-95(B)"));
+            
             overallMetrics = {
-              overall_mAP50: parseFloat(values[7]),
-              overall_mAP50_95: parseFloat(values[8]),
-              overall_precision: parseFloat(values[5]),
-              overall_recall: parseFloat(values[6]),
+              overall_precision: precisionIdx >= 0 ? parseFloat(values[precisionIdx]) : null,
+              overall_recall: recallIdx >= 0 ? parseFloat(values[recallIdx]) : null,
+              overall_mAP50: mAP50Idx >= 0 ? parseFloat(values[mAP50Idx]) : null,
+              overall_mAP50_95: mAP5095Idx >= 0 ? parseFloat(values[mAP5095Idx]) : null,
+              epoch: parseInt(values[0]),
             };
           }
         }
