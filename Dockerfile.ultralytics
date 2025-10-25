@@ -42,8 +42,15 @@ ADD https://github.com/ultralytics/assets/releases/download/v0.0.0/Arial.ttf \
 # Create working directory
 WORKDIR /ultralytics
 
-# Install PyTorch nightly for CUDA 12.9 (exact match for your nvidia-smi output)
-RUN pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu129
+# Install PyTorch 2.5.1 stable for CUDA 12.4 (RTX 5070 Ti support)
+# Install PyTorch with CUDA 12.9 support first
+RUN pip install --no-cache-dir --pre torch torchaudio \
+    --index-url https://download.pytorch.org/whl/nightly/cu129
+
+# Install torchvision with CUDA 12.8 (fixes sm_120 NMS kernel issue for RTX 5070 Ti)
+RUN pip uninstall -y torchvision && \
+    pip install --no-cache-dir --pre torchvision \
+    --index-url https://download.pytorch.org/whl/nightly/cu128
 
 # Install ultralytics and dependencies directly from PyPI
 RUN pip install ultralytics albumentations faster-coco-eval tensorrt wandb jupyter tensorboard pandas streamlit pillow pyyaml
