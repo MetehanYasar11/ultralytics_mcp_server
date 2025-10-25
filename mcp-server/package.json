@@ -1,0 +1,26 @@
+{
+  "name": "ultralytics-training-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP Server for Ultralytics YOLO Training Operations - Automated training with AI agents",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ultralytics",
+    "yolo",
+    "training",
+    "ai-automation"
+  ],
+  "author": "Metehan Yasar",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "axios": "^1.7.9"
+  }
+}
