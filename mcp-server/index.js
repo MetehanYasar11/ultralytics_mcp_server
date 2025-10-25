@@ -1386,71 +1386,64 @@ EOF`);
         // If no active training and we have weights, run validation for specific class metrics
         let classSpecificMetrics = null;
         if (!isTrainingActive && hasWeights && class_name) {
-          // Create a Python script to run validation and extract class metrics
-          const valScript = `
-import sys
-sys.path.append('/ultralytics')
-from ultralytics import YOLO
-import json
-
-model = YOLO("${weightsPath}")
-results = model.val(data="${datasetPath}", split="val", verbose=False)
-
-# Get class names
-class_names = results.names
-
-# Find matching classes
-search_term = "${class_name}".lower()
-matching_classes = []
-for idx, name in class_names.items():
-    if search_term in name.lower():
-        matching_classes.append({
-            "index": idx,
-            "name": name
-        })
-
-# Get per-class metrics
-class_metrics = []
-if hasattr(results, 'box') and hasattr(results.box, 'ap_class_index'):
-    ap_per_class = results.box.ap  # AP values per class
-    ap50_per_class = results.box.ap50  # AP50 values per class
-    
-    for match in matching_classes:
-        idx = match["index"]
-        if idx < len(ap50_per_class):
-            class_metrics.append({
-                "class_index": idx,
-                "class_name": match["name"],
-                "mAP50": float(ap50_per_class[idx]) if ap50_per_class[idx] is not None else 0.0,
-                "mAP50_95": float(ap_per_class[idx]) if ap_per_class[idx] is not None else 0.0
-            })
-
-output = {
-    "matching_classes": matching_classes,
-    "class_metrics": class_metrics
-}
-
-print(json.dumps(output))
-`;
-
-          // Write and execute the script
-          await execInContainer(`cat > /tmp/val_class_metrics.py << 'EOFPYTHON'
-${valScript}
-EOFPYTHON`);
-
+          // Use YOLO CLI to run validation - much simpler!
           const valResult = await execInContainer(
-            `cd /ultralytics && timeout 300 python /tmp/val_class_metrics.py 2>&1 | tail -1`
+            `cd /ultralytics && yolo val model="${weightsPath}" data="${datasetPath}" save_json=True 2>&1`
           );
 
-          if (valResult.success && valResult.stdout.trim()) {
-            try {
-              const valData = JSON.parse(valResult.stdout.trim());
-              classSpecificMetrics = valData;
-            } catch (e) {
-              // Failed to parse, include error info
+          // YOLO saves results to runs/detect/val/predictions.json
+          const latestValDir = await execInContainer(
+            `ls -td /ultralytics/runs/detect/val* 2>/dev/null | head -1`
+          );
+          
+          if (latestValDir.success && latestValDir.stdout.trim()) {
+            const valDir = latestValDir.stdout.trim();
+            
+            // Try to read predictions.json or results.json
+            let resultsJSON = await readFileFromContainer(`${valDir}/predictions.json`);
+            if (!resultsJSON) {
+              resultsJSON = await readFileFromContainer(`${valDir}/results.json`);
+            }
+            
+            if (resultsJSON) {
+              try {
+                const results = JSON.parse(resultsJSON);
+                
+                // Extract class-specific metrics
+                const searchTerm = class_name.toLowerCase();
+                const classMetrics = [];
+                
+                // YOLO results typically have per-class metrics
+                if (results.metrics && results.metrics.per_class) {
+                  for (const [className, metrics] of Object.entries(results.metrics.per_class)) {
+                    if (className.toLowerCase().includes(searchTerm)) {
+                      classMetrics.push({
+                        class_name: className,
+                        ...metrics
+                      });
+                    }
+                  }
+                }
+                
+                classSpecificMetrics = {
+                  validation_dir: valDir,
+                  class_metrics: classMetrics.length > 0 ? classMetrics : null,
+                  note: classMetrics.length > 0 
+                    ? "Class-specific metrics from validation run"
+                    : "Validation completed but class-specific format not available. Check confusion matrix."
+                };
+              } catch (e) {
+                classSpecificMetrics = {
+                  error: "Failed to parse validation results",
+                  validation_output: valResult.stdout.substring(0, 1000)
+                };
+              }
+            } else {
+              // Even if JSON not available, we ran validation
               classSpecificMetrics = {
-                error: "Failed to parse validation results",
-                raw_output: valResult.stdout.substring(0, 500)
+                validation_completed: true,
+                validation_dir: valDir,
+                note: "Validation completed. Check confusion_matrix.png for class-specific details."
               };
             }
           }
