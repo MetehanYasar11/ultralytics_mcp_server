@@ -35,7 +35,7 @@ async function execInContainer(command) {
 
 // Helper: Read file from container
 async function readFileFromContainer(filePath) {
-  const result = await execInContainer(`cat ${filePath} 2>/dev/null || echo ""`);
+  const result = await execInContainer(`cat "${filePath}" 2>/dev/null || echo ""`);
   return result.stdout;
 }
 
