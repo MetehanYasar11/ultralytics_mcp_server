@@ -374,49 +374,122 @@ except Exception as e:
       }
 
       case "get_training_status": {
-        // Check if training process is running
-        const psResult = await execInContainer(
-          `ps aux | grep "agent_train_script.py" | grep -v grep || echo ""`
+        // Get latest training directory by modification time (not alphabetically)
+        const lsResult = await execInContainer(
+          `find /ultralytics/runs/detect -maxdepth 1 -type d \\( -name "training_*" -o -name "custom_*" \\) -printf "%T@ %p\\n" | sort -rn | head -1 | cut -d' ' -f2 | xargs basename`
         );
-        const isTraining = psResult.stdout.trim().length > 0;
-
-        // Get latest training directory
-        const trainDirs = await listDirsInContainer("/ultralytics/runs/detect");
-        const latestTraining = trainDirs[trainDirs.length - 1];
+        const latestTrainingName = lsResult.stdout.trim();
+        const latestTraining = latestTrainingName ? `/ultralytics/runs/detect/${latestTrainingName}` : null;
 
         let status = {
-          is_training: isTraining,
-          latest_training: latestTraining ? path.basename(latestTraining) : null,
+          is_training: false,
+          latest_training: latestTrainingName || null,
         };
 
         if (latestTraining) {
+          // Check training log to see if training is active
+          const logContent = await readFileFromContainer("/tmp/training_log.txt");
+          
+          // Get last 500 lines for better detection
+          const logLines = logContent.trim().split("\n");
+          const recentLines = logLines.slice(-500).join("\n");
+          
+          // Check if training is active based on log patterns
+          const hasRecentEpochInfo = /\d+\/\d+\s+[\d.]+G/.test(recentLines); // "8/50  9.07G" pattern
+          const hasProgressBars = /\|\s*\d+\/\d+/.test(recentLines); // Progress bar pattern
+          const hasIterationSpeed = /it\/s/.test(recentLines); // "4.50it/s" pattern
+          const hasStartedRecently = recentLines.includes("Starting training") && 
+                                     !recentLines.includes("Training completed");
+          
+          const isActiveLog = hasRecentEpochInfo || hasProgressBars || 
+                             hasIterationSpeed || hasStartedRecently;
+
+          // Also check for Python training processes
+          const psResult = await execInContainer(
+            `ps aux | grep -E "(train_script|ultralytics|YOLO)" | grep -v grep || echo ""`
+          );
+          const hasTrainingProcess = psResult.stdout.trim().length > 0;
+
+          status.is_training = isActiveLog || hasTrainingProcess;
+
           // Try to read results.csv
           const resultsCSV = await readFileFromContainer(
             `${latestTraining}/results.csv`
           );
+          
           if (resultsCSV) {
             const lines = resultsCSV.trim().split("\n");
-            status.epochs_completed = lines.length - 1; // -1 for header
-            if (lines.length > 1) {
-              const lastLine = lines[lines.length - 1];
-              const values = lastLine.split(",").map((v) => v.trim());
+            
+            // If training is active, find the last COMPLETED epoch from logs
+            let lastCompletedEpoch = lines.length - 1; // Default to last line
+            
+            if (status.is_training) {
+              // Look for last completed validation in logs (lines with "all" class summary)
+              const validationMatches = recentLines.match(/all\s+\d+\s+\d+\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/g);
+              if (validationMatches && validationMatches.length > 0) {
+                // Get the last validation result
+                const lastValidation = validationMatches[validationMatches.length - 1];
+                const valMatch = lastValidation.match(/all\s+\d+\s+\d+\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/);
+                if (valMatch) {
+                  const [_, precision, recall, mAP50, mAP50_95] = valMatch;
+                  
+                  // Find which epoch has these exact metrics in CSV
+                  for (let i = 1; i < lines.length; i++) {
+                    const csvValues = lines[i].split(",").map(v => v.trim());
+                    const csvMAP50 = parseFloat(csvValues[12]);
+                    const csvMAP50_95 = parseFloat(csvValues[13]);
+                    
+                    if (Math.abs(csvMAP50 - parseFloat(mAP50)) < 0.001 && 
+                        Math.abs(csvMAP50_95 - parseFloat(mAP50_95)) < 0.001) {
+                      lastCompletedEpoch = i;
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+            
+            status.epochs_completed = lastCompletedEpoch;
+            
+            if (lines.length > lastCompletedEpoch) {
+              const targetLine = lines[lastCompletedEpoch];
+              const values = targetLine.split(",").map((v) => v.trim());
               status.current_metrics = {
-                epoch: values[0],
-                box_loss: values[7],
-                cls_loss: values[8],
-                dfl_loss: values[9],
-                precision: values[10],
-                recall: values[11],
-                mAP50: values[12],
-                mAP50_95: values[13],
+                epoch: parseInt(values[0]),
+                box_loss: parseFloat(values[2]), // train/box_loss
+                cls_loss: parseFloat(values[3]), // train/cls_loss
+                dfl_loss: parseFloat(values[4]), // train/dfl_loss
+                precision: parseFloat(values[5]), // metrics/precision(B)
+                recall: parseFloat(values[6]), // metrics/recall(B)
+                mAP50: parseFloat(values[7]), // metrics/mAP50(B)
+                mAP50_95: parseFloat(values[8]), // metrics/mAP50-95(B)
               };
             }
           }
 
-          // Read args.yaml
+          // Read args.yaml for config
           const argsYAML = await readFileFromContainer(`${latestTraining}/args.yaml`);
           if (argsYAML) {
-            status.config = argsYAML;
+            // Parse key config values
+            const modelMatch = argsYAML.match(/model:\s*(.+)/);
+            const dataMatch = argsYAML.match(/data:\s*(.+)/);
+            const epochsMatch = argsYAML.match(/epochs:\s*(\d+)/);
+            const batchMatch = argsYAML.match(/batch:\s*(\d+)/);
+            const deviceMatch = argsYAML.match(/device:\s*'?(\d+|cpu)'?/);
+
+            status.training_config = {
+              model: modelMatch ? modelMatch[1].trim() : null,
+              dataset: dataMatch ? dataMatch[1].trim() : null,
+              total_epochs: epochsMatch ? parseInt(epochsMatch[1]) : null,
+              batch_size: batchMatch ? parseInt(batchMatch[1]) : null,
+              device: deviceMatch ? deviceMatch[1].trim() : null,
+            };
+
+            // Calculate progress percentage
+            if (status.epochs_completed && status.training_config.total_epochs) {
+              status.progress_percent = 
+                ((status.epochs_completed / status.training_config.total_epochs) * 100).toFixed(1);
+            }
           }
         }
 
