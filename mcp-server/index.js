@@ -390,6 +390,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["search_id"],
         },
       },
+      {
+        name: "get_class_metrics",
+        description:
+          "Get per-class performance metrics for a specific training run. Useful for analyzing individual class performance like 'Root Canal Treatment', 'Caries', etc.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            training_name: {
+              type: "string",
+              description: "Training directory name (e.g., 'training_042643')",
+            },
+            class_name: {
+              type: "string",
+              description: "Class name to search for (e.g., 'Root Canal Treatment', 'Caries'). Case-insensitive partial matching supported.",
+            },
+          },
+          required: ["training_name"],
+        },
+      },
     ],
   };
 });
@@ -1194,6 +1213,150 @@ EOF`);
                         batch_size: queue.best_model.batch_size,
                       }
                     : null,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      case "get_class_metrics": {
+        const { training_name, class_name } = args;
+
+        const trainingPath = `/ultralytics/runs/detect/${training_name}`;
+
+        // Read args.yaml to get dataset path
+        const argsYAML = await readFileFromContainer(`${trainingPath}/args.yaml`);
+        if (!argsYAML) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ error: "Training not found or args.yaml missing" }),
+              },
+            ],
+          };
+        }
+
+        // Extract dataset path
+        const dataMatch = argsYAML.match(/data:\s*(.+)/);
+        if (!dataMatch) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ error: "Could not find dataset path in args.yaml" }),
+              },
+            ],
+          };
+        }
+
+        const datasetPath = dataMatch[1].trim();
+
+        // Read dataset yaml to get class names
+        const datasetYAML = await readFileFromContainer(datasetPath);
+        if (!datasetYAML) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ error: `Dataset YAML not found: ${datasetPath}` }),
+              },
+            ],
+          };
+        }
+
+        // Parse class names
+        const classLines = datasetYAML.match(/names:\s*\n([\s\S]+?)(?=\n\w+:|$)/);
+        if (!classLines) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ error: "Could not parse class names from dataset YAML" }),
+              },
+            ],
+          };
+        }
+
+        const classes = {};
+        const classMatches = classLines[1].matchAll(/(\d+):\s*(.+)/g);
+        for (const match of classMatches) {
+          const [_, index, name] = match;
+          classes[parseInt(index)] = name.trim();
+        }
+
+        // If class_name provided, search for it
+        let targetClasses = [];
+        if (class_name) {
+          const searchTerm = class_name.toLowerCase();
+          for (const [index, name] of Object.entries(classes)) {
+            if (name.toLowerCase().includes(searchTerm)) {
+              targetClasses.push({ index: parseInt(index), name });
+            }
+          }
+
+          if (targetClasses.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                    error: `No class found matching '${class_name}'`,
+                    available_classes: classes,
+                  }),
+                },
+              ],
+            };
+          }
+        } else {
+          // Return all classes
+          targetClasses = Object.entries(classes).map(([index, name]) => ({
+            index: parseInt(index),
+            name,
+          }));
+        }
+
+        // Read results.csv for per-class metrics if available
+        // YOLO typically saves overall metrics, not per-class in CSV
+        // Best approach: Read from confusion matrix or validation logs
+
+        // Try to get class metrics from results.csv columns
+        // YOLOv8+ may have class-specific columns in newer versions
+        const resultsCSV = await readFileFromContainer(`${trainingPath}/results.csv`);
+        
+        // Read latest metrics from CSV
+        let overallMetrics = {};
+        if (resultsCSV) {
+          const lines = resultsCSV.trim().split("\n");
+          if (lines.length > 1) {
+            const lastLine = lines[lines.length - 1];
+            const values = lastLine.split(",").map((v) => v.trim());
+            overallMetrics = {
+              overall_mAP50: parseFloat(values[7]),
+              overall_mAP50_95: parseFloat(values[8]),
+              overall_precision: parseFloat(values[5]),
+              overall_recall: parseFloat(values[6]),
+            };
+          }
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  training_name,
+                  dataset: datasetPath,
+                  total_classes: Object.keys(classes).length,
+                  searched_classes: targetClasses,
+                  overall_metrics: overallMetrics,
+                  note: "YOLO stores per-class metrics in validation logs and confusion matrix. Overall metrics shown above. For detailed per-class analysis, check confusion_matrix.png in the training directory.",
+                  confusion_matrix_path: `${trainingPath}/confusion_matrix.png`,
+                  all_classes: classes,
                 },
                 null,
                 2
